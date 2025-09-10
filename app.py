@@ -278,7 +278,9 @@ with st.sidebar:
     st.header("⚙️ Pengaturan")
     selected_lokasi = st.selectbox("🌍 Pilih Pasaran", lokasi_list)
     putaran = st.number_input("🔁 Jumlah Putaran Terakhir", 10, 1000, 100)
+    # --- PENAMBAHAN KOLOM 2D/3D/4D ---
     mode_angka = st.radio("Mode", ("4D", "3D", "2D"), horizontal=True)
+    # --- END PENAMBAHAN ---
     st.markdown("---")
     st.markdown("### 🎯 Opsi Prediksi")
     jumlah_digit = st.slider("🔢 Jumlah Digit Prediksi", 1, 9, 9)
@@ -290,37 +292,8 @@ with st.sidebar:
     st.markdown("### 🪟 Window Size per Digit")
     window_per_digit = {label: st.number_input(f"{label.upper()}", 1, 100, 7, key=f"win_{label}") for label in DIGIT_LABELS}
 
+# --- LOGIKA UNTUK MENENTUKAN JUMLAH DIGIT BERDASARKAN MODE ---
 digit_count = {"4D": 4, "3D": 3, "2D": 2}[mode_angka]
-
-# --- PENAMBAHAN LOGIKA AUTO-SCAN UNTUK MODE 2D ---
-if 'auto_scan_triggered_for_mode' not in st.session_state:
-    st.session_state.auto_scan_triggered_for_mode = None
-
-# Jika mode adalah 2D dan auto-scan belum pernah dipicu untuk mode ini
-if mode_angka == "2D" and st.session_state.auto_scan_triggered_for_mode != "2D":
-    # Hanya picu jika tidak ada scan yang sedang berjalan atau dalam antrian
-    if not st.session_state.scan_queue and not st.session_state.current_scan_job:
-        st.toast("🚀 Memulai auto-scan untuk mode 2D...")
-        # Daftar pekerjaan scan khusus untuk 2D
-        jobs_2d = [
-            'puluhan', 
-            'satuan', 
-            'jumlah_belakang', 
-            'bbfs_puluhan-satuan', 
-            'shio_belakang', 
-            'jalur_puluhan-satuan'
-        ]
-        # Masukkan pekerjaan ke dalam antrian
-        st.session_state.scan_queue = jobs_2d
-        # Tandai bahwa auto-scan untuk 2D telah dipicu
-        st.session_state.auto_scan_triggered_for_mode = "2D"
-        # Rerun untuk memulai pemrosesan antrian
-        st.rerun()
-
-# Jika mode bukan 2D, reset penanda agar bisa dipicu lagi nanti jika kembali ke 2D
-elif mode_angka != "2D":
-    st.session_state.auto_scan_triggered_for_mode = None
-# --- END PENAMBAHAN ---
 
 def get_file_name_from_lokasi(lokasi):
     cleaned_lokasi = lokasi.lower().replace(" ", "")
@@ -338,6 +311,7 @@ if st.button("Ambil Data dari Keluaran Angka", use_container_width=True):
     try:
         with open(file_path, 'r') as f:
             lines = f.readlines()
+        # --- PERUBAHAN LOGIKA SLICING BERDASARKAN digit_count ---
         angka_from_file = [line.strip()[-digit_count:] for line in lines[-putaran:] if line.strip() and line.strip()[-digit_count:].isdigit()]
         if angka_from_file:
             if st.session_state.active_data == 'A':
@@ -367,6 +341,7 @@ with col1:
         label_visibility="collapsed"
     )
     if riwayat_text_1 != "\n".join(st.session_state.angka_list):
+        # --- PERUBAHAN LOGIKA SLICING BERDASARKAN digit_count ---
         st.session_state.angka_list = [line.strip()[-digit_count:] for line in riwayat_text_1.splitlines() if line.strip() and line.strip()[-digit_count:].isdigit()]
         st.rerun()
 
@@ -380,6 +355,7 @@ with col2:
         label_visibility="collapsed"
     )
     if riwayat_text_2 != "\n".join(st.session_state.angka_list_2):
+        # --- PERUBAHAN LOGIKA SLICING BERDASARKAN digit_count ---
         st.session_state.angka_list_2 = [line.strip().split()[-1][-digit_count:] for line in riwayat_text_2.splitlines() if line.strip() and line.strip().split()[-1][-digit_count:].isdigit()]
         st.rerun()
 
