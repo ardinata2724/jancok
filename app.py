@@ -278,6 +278,9 @@ with st.sidebar:
     st.header("⚙️ Pengaturan")
     selected_lokasi = st.selectbox("🌍 Pilih Pasaran", lokasi_list)
     putaran = st.number_input("🔁 Jumlah Putaran Terakhir", 10, 1000, 100)
+    # --- PENAMBAHAN KOLOM 2D/3D/4D ---
+    mode_angka = st.radio("Mode", ("4D", "3D", "2D"), horizontal=True, key="mode_angka_selector")
+    # --- END PENAMBAHAN ---
     st.markdown("---")
     st.markdown("### 🎯 Opsi Prediksi")
     jumlah_digit = st.slider("🔢 Jumlah Digit Prediksi", 1, 9, 9)
@@ -288,6 +291,9 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 🪟 Window Size per Digit")
     window_per_digit = {label: st.number_input(f"{label.upper()}", 1, 100, 7, key=f"win_{label}") for label in DIGIT_LABELS}
+
+# --- LOGIKA UNTUK MENENTUKAN JUMLAH DIGIT BERDASARKAN MODE ---
+digit_count = {"4D": 4, "3D": 3, "2D": 2}[mode_angka]
 
 def get_file_name_from_lokasi(lokasi):
     cleaned_lokasi = lokasi.lower().replace(" ", "")
@@ -305,12 +311,11 @@ if st.button("Ambil Data dari Keluaran Angka", use_container_width=True):
     try:
         with open(file_path, 'r') as f:
             lines = f.readlines()
-        angka_from_file = [line.strip()[:4] for line in lines[-putaran:] if line.strip() and line.strip()[:4].isdigit()]
+        # --- PERUBAHAN LOGIKA SLICING BERDASARKAN digit_count ---
+        angka_from_file = [line.strip()[-digit_count:] for line in lines[-putaran:] if line.strip() and line.strip()[-digit_count:].isdigit()]
         if angka_from_file:
-            if st.session_state.active_data == 'A':
-                st.session_state.angka_list = angka_from_file
-            else:
-                st.session_state.angka_list_2 = [line.strip().split()[-1][:4] for line in lines[-putaran:] if line.strip() and line.strip().split()[-1][:4].isdigit()]
+            target_list = 'angka_list' if st.session_state.active_data == 'A' else 'angka_list_2'
+            st.session_state[target_list] = angka_from_file
             st.success(f"{len(angka_from_file)} data berhasil dimuat ke 'Data {st.session_state.active_data}' dari '{base_filename}'.")
             st.rerun()
     except FileNotFoundError:
@@ -333,8 +338,8 @@ with col1:
         key="manual_data_input_1",
         label_visibility="collapsed"
     )
+    # --- LOGIKA INPUT MANUAL TIDAK BERUBAH (TETAP 4 DIGIT) SESUAI PERMINTAAN ---
     if riwayat_text_1 != "\n".join(st.session_state.angka_list):
-        # --- PERUBAHAN DI SINI: Logika untuk KOTAK A (mengambil 4 angka pertama) ---
         st.session_state.angka_list = [line.strip()[:4] for line in riwayat_text_1.splitlines() if line.strip() and line.strip()[:4].isdigit()]
         st.rerun()
 
@@ -347,15 +352,16 @@ with col2:
         key="manual_data_input_2",
         label_visibility="collapsed"
     )
+    # --- LOGIKA INPUT MANUAL TIDAK BERUBAH (TETAP 4 DIGIT) SESUAI PERMINTAAN ---
     if riwayat_text_2 != "\n".join(st.session_state.angka_list_2):
-        # --- TIDAK ADA PERUBAHAN: Logika untuk KOTAK B (mengambil 4 angka terakhir) ---
         st.session_state.angka_list_2 = [line.strip().split()[-1][:4] for line in riwayat_text_2.splitlines() if line.strip() and line.strip().split()[-1][:4].isdigit()]
         st.rerun()
 
 active_list = st.session_state.angka_list if st.session_state.active_data == 'A' else st.session_state.angka_list_2
 df = pd.DataFrame({"angka": active_list})
 
-tab_scan, tab_manajemen, tab_angka_main, tab_prediksi = st.tabs(["🪟 Scan Window Size", "⚙️ Manajemen Model", "🎯 Angka Main", "🔮 Prediksi & Hasil"])
+# --- PENAMBAHAN TAB SCAN OTOMATIS ---
+tab_scan, tab_auto_scan, tab_manajemen, tab_angka_main, tab_prediksi = st.tabs(["🪟 Scan Manual", "⚡ Scan Otomatis", "⚙️ Manajemen Model", "🎯 Angka Main", "🔮 Prediksi & Hasil"])
 
 with tab_prediksi:
     if st.button("🚀 Jalankan Prediksi", use_container_width=True, type="primary"):
@@ -368,8 +374,8 @@ with tab_prediksi:
                 for i, label in enumerate(DIGIT_LABELS): st.markdown(f"**{label.upper()}:** {', '.join(map(str, result[i]))}")
                 st.divider()
                 all_combinations = list(product(*result))
-                st.subheader(f"🔢 Semua Kombinasi 4D ({len(all_combinations)} Line)")
-                st.text_area("Kombinasi Penuh", " * ".join(["".join(map(str, combo)) for combo in all_combinations]), height=300)
+                st.subheader(f"🔢 Semua Kombinasi {digit_count}D ({len(all_combinations)} Line)")
+                st.text_area("Kombinasi Penuh", " * ".join(["".join(map(str, combo))[-digit_count:] for combo in all_combinations]), height=300)
         else: st.warning("❌ Data tidak cukup untuk prediksi.")
 
 with tab_manajemen:
@@ -390,8 +396,32 @@ with tab_manajemen:
             st.success("✅ Semua model berhasil dilatih!"); st.rerun()
         else: st.error("Data tidak cukup untuk melatih.")
 
+# --- KONTEN TAB SCAN OTOMATIS ---
+with tab_auto_scan:
+    st.subheader(f"Otomatisasi Scan Window Size untuk Mode {mode_angka}")
+    st.info("Fitur ini akan menjalankan serangkaian proses scan WS yang relevan untuk mode yang Anda pilih di sidebar.")
+    
+    is_scanning = bool(st.session_state.scan_queue or st.session_state.current_scan_job)
+    
+    if st.button(f"🚀 Jalankan Scan Otomatis {mode_angka}", use_container_width=True, type="primary", disabled=is_scanning):
+        scan_jobs = []
+        if mode_angka == '2D':
+            scan_jobs = ['puluhan', 'satuan', 'jumlah_belakang', 'bbfs_puluhan-satuan', 'shio_belakang', 'jalur_puluhan-satuan']
+        elif mode_angka == '3D':
+            scan_jobs = ['ratusan', 'puluhan', 'satuan', 'jumlah_tengah', 'jumlah_belakang', 'bbfs_ratusan-puluhan', 'bbfs_puluhan-satuan', 'shio_tengah', 'shio_belakang', 'jalur_ratusan-puluhan', 'jalur_puluhan-satuan']
+        elif mode_angka == '4D':
+            scan_jobs = DIGIT_LABELS + JUMLAH_LABELS + BBFS_LABELS + SHIO_LABELS + JALUR_LABELS
+            
+        if scan_jobs:
+            st.session_state.scan_queue = scan_jobs
+            st.toast(f"✅ Auto-scan untuk mode {mode_angka} ditambahkan ke antrian!")
+            st.rerun()
+            
+    if is_scanning:
+        st.warning("Harap tunggu, proses scan otomatis sedang berjalan...")
+
 with tab_scan:
-    st.subheader("Pencarian Window Size (WS) Optimal per Kategori")
+    st.subheader("Pencarian Window Size (WS) Optimal per Kategori (Manual)")
     scan_cols = st.columns(2)
     min_ws = scan_cols[0].number_input("Min WS", 1, 99, 5)
     max_ws = scan_cols[1].number_input("Max WS", 1, 100, 31)
@@ -425,44 +455,46 @@ with tab_scan:
         for i, label in enumerate(JALUR_LABELS): create_scan_button(label, cols[i])
     st.divider()
 
-    if st.session_state.scan_outputs:
-        st.markdown("---")
-        st.subheader("✅ Hasil Scan Selesai")
-        display_order = DIGIT_LABELS + JUMLAH_LABELS + BBFS_LABELS + SHIO_LABELS + JALUR_LABELS
-        for label in display_order:
-            if label in st.session_state.scan_outputs:
-                data = st.session_state.scan_outputs[label]
-                with st.expander(f"Hasil untuk {label.replace('_', ' ').upper()}", expanded=True):
-                    result_df = data.get("table")
-                    if result_df is not None and not result_df.empty:
-                        st.dataframe(result_df)
-                        if data["ws"] is not None:
-                            st.info(f"💡 **WS terbaik yang ditemukan: {data['ws']}**")
-                    else:
-                        st.warning("Tidak ada hasil yang valid untuk rentang WS ini.")
-        st.markdown("---")
+# --- LOGIKA BERSAMA UNTUK PROSES SCAN DAN TAMPILAN HASIL (Di luar Tab) ---
+if st.session_state.scan_queue:
+    queue_display = " ➡️ ".join([f"**{job.replace('_', ' ').upper()}**" for job in st.session_state.scan_queue])
+    st.info(f"Antrian Berikutnya: {queue_display}")
 
-    if st.session_state.scan_queue:
-        queue_display = " ➡️ ".join([f"**{job.replace('_', ' ').upper()}**" for job in st.session_state.scan_queue])
-        st.info(f"Antrian Berikutnya: {queue_display}")
-    
-    if not st.session_state.current_scan_job and st.session_state.scan_queue:
-        st.session_state.current_scan_job = st.session_state.scan_queue.pop(0)
+if not st.session_state.current_scan_job and st.session_state.scan_queue:
+    st.session_state.current_scan_job = st.session_state.scan_queue.pop(0)
+    st.rerun()
+
+if st.session_state.current_scan_job:
+    label = st.session_state.current_scan_job
+    if len(df) < max_ws + 10:
+        st.error(f"Data tidak cukup untuk scan {label.upper()}. Tugas dibatalkan.")
+        st.session_state.current_scan_job = None
+        time.sleep(2)
+        st.rerun()
+    else:
+        st.warning(f"⏳ Sedang menjalankan scan untuk **{label.replace('_', ' ').upper()}**...")
+        best_ws, result_table = find_best_window_size(df, label, model_type, min_ws, max_ws, jumlah_digit, jumlah_digit_shio)
+        st.session_state.scan_outputs[label] = {"ws": best_ws, "table": result_table}
+        st.session_state.current_scan_job = None
         st.rerun()
 
-    if st.session_state.current_scan_job:
-        label = st.session_state.current_scan_job
-        if len(df) < max_ws + 10:
-            st.error(f"Data tidak cukup untuk scan {label.upper()}. Tugas dibatalkan.")
-            st.session_state.current_scan_job = None
-            time.sleep(2)
-            st.rerun()
-        else:
-            st.warning(f"⏳ Sedang menjalankan scan untuk **{label.replace('_', ' ').upper()}**...")
-            best_ws, result_table = find_best_window_size(df, label, model_type, min_ws, max_ws, jumlah_digit, jumlah_digit_shio)
-            st.session_state.scan_outputs[label] = {"ws": best_ws, "table": result_table}
-            st.session_state.current_scan_job = None
-            st.rerun()
+if st.session_state.scan_outputs:
+    st.markdown("---")
+    st.subheader("✅ Hasil Scan Selesai")
+    display_order = DIGIT_LABELS + JUMLAH_LABELS + BBFS_LABELS + SHIO_LABELS + JALUR_LABELS
+    for label in display_order:
+        if label in st.session_state.scan_outputs:
+            data = st.session_state.scan_outputs[label]
+            with st.expander(f"Hasil untuk {label.replace('_', ' ').upper()}", expanded=True):
+                result_df = data.get("table")
+                if result_df is not None and not result_df.empty:
+                    st.dataframe(result_df, use_container_width=True)
+                    if data["ws"] is not None:
+                        st.info(f"💡 **WS terbaik yang ditemukan: {data['ws']}**")
+                else:
+                    st.warning("Tidak ada hasil yang valid untuk rentang WS ini.")
+    st.markdown("---")
+
 
 with tab_angka_main:
     st.subheader("Analisis Angka Main dari Data Historis")
