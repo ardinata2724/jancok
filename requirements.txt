@@ -1,0 +1,8 @@
+requests
+beautifulsoup4
+undetected-chromedriver
+streamlit
+pandas
+numpy
+scikit-learn
+tensorflow
