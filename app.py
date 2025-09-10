@@ -360,8 +360,8 @@ with col2:
 active_list = st.session_state.angka_list if st.session_state.active_data == 'A' else st.session_state.angka_list_2
 df = pd.DataFrame({"angka": active_list})
 
-# --- PENAMBAHAN TAB SCAN OTOMATIS ---
-tab_scan, tab_auto_scan, tab_manajemen, tab_angka_main, tab_prediksi = st.tabs(["🪟 Scan Manual", "⚡ Scan Otomatis", "⚙️ Manajemen Model", "🎯 Angka Main", "🔮 Prediksi & Hasil"])
+# --- PENGGABUNGAN TAB SCAN ---
+tab_scan, tab_manajemen, tab_angka_main, tab_prediksi = st.tabs(["🪟 Scan Window Size", "⚙️ Manajemen Model", "🎯 Angka Main", "🔮 Prediksi & Hasil"])
 
 with tab_prediksi:
     if st.button("🚀 Jalankan Prediksi", use_container_width=True, type="primary"):
@@ -396,10 +396,19 @@ with tab_manajemen:
             st.success("✅ Semua model berhasil dilatih!"); st.rerun()
         else: st.error("Data tidak cukup untuk melatih.")
 
-# --- KONTEN TAB SCAN OTOMATIS ---
-with tab_auto_scan:
-    st.subheader(f"Otomatisasi Scan Window Size untuk Mode {mode_angka}")
-    st.info("Fitur ini akan menjalankan serangkaian proses scan WS yang relevan untuk mode yang Anda pilih di sidebar.")
+with tab_scan:
+    st.subheader("Pencarian Window Size (WS) Optimal")
+    scan_cols = st.columns(2)
+    min_ws = scan_cols[0].number_input("Min WS", 1, 99, 5)
+    max_ws = scan_cols[1].number_input("Max WS", 1, 100, 31)
+    if st.button("❌ Hapus Hasil Scan"): 
+        st.session_state.scan_outputs = {}
+        st.rerun()
+    st.divider()
+
+    # --- KONTEN SCAN OTOMATIS DIPINDAHKAN KE SINI ---
+    st.subheader(f"Otomatisasi Scan untuk Mode {mode_angka}")
+    st.info("Klik tombol di bawah untuk menjalankan serangkaian proses scan WS yang relevan untuk mode yang Anda pilih di sidebar.")
     
     is_scanning = bool(st.session_state.scan_queue or st.session_state.current_scan_job)
     
@@ -419,17 +428,11 @@ with tab_auto_scan:
             
     if is_scanning:
         st.warning("Harap tunggu, proses scan otomatis sedang berjalan...")
-
-with tab_scan:
-    st.subheader("Pencarian Window Size (WS) Optimal per Kategori (Manual)")
-    scan_cols = st.columns(2)
-    min_ws = scan_cols[0].number_input("Min WS", 1, 99, 5)
-    max_ws = scan_cols[1].number_input("Max WS", 1, 100, 31)
-    if st.button("❌ Hapus Hasil Scan"): 
-        st.session_state.scan_outputs = {}
-        st.rerun()
+    
     st.divider()
 
+    # --- KONTEN SCAN MANUAL ---
+    st.subheader("Scan per Kategori (Manual)")
     def create_scan_button(label, container):
         is_pending = label in st.session_state.scan_queue or st.session_state.current_scan_job == label
         if container.button(f"🔎 Scan {label.replace('_', ' ').upper()}", key=f"scan_{label}", use_container_width=True, disabled=is_pending):
