@@ -14,7 +14,6 @@ import tensorflow as tf
 # BAGIAN 1: FUNGSI-FUNGSI & DEFINISI KELAS INTI
 # ==============================================================================
 
-# --- PERBAIKAN: Mengganti Class dengan Fungsi + Lambda Layer agar lebih stabil ---
 def positional_encoding_func(x):
     seq_len, d_model = tf.shape(x)[1], tf.shape(x)[2]
     pos = tf.cast(tf.range(seq_len)[:, tf.newaxis], dtype=tf.float32)
@@ -91,8 +90,8 @@ def load_cached_model(model_path):
     from tensorflow.keras.models import load_model
     if os.path.exists(model_path):
         try:
-            # --- PERBAIKAN: custom_objects tidak lagi diperlukan untuk PositionalEncoding ---
-            return load_model(model_path)
+            # --- PERBAIKAN: Menambahkan kembali custom_objects dengan referensi ke FUNGSI ---
+            return load_model(model_path, custom_objects={'positional_encoding_func': positional_encoding_func})
         except Exception as e:
             st.error(f"Gagal memuat model di {model_path}: {e}")
     return None
@@ -148,7 +147,6 @@ def build_tf_model(input_len, model_type, problem_type, num_classes):
     
     inputs = Input(shape=(input_len,))
     x = Embedding(10, 64)(inputs)
-    # --- PERBAIKAN: Menggunakan Lambda Layer yang lebih stabil ---
     x = Lambda(positional_encoding_func, name='positional_encoding')(x)
     
     if model_type == "transformer":
@@ -280,7 +278,6 @@ def train_and_save_model(df, lokasi, window_dict, model_type, labels_to_train):
         model.save(model_path)
         bar.progress(100, text=f"Model {label.upper()} berhasil disimpan!"); time.sleep(1); bar.empty()
 
-# ... (Sisa kode dari sini ke bawah tidak berubah) ...
 # ==============================================================================
 # APLIKASI STREAMLIT UTAMA
 # ==============================================================================
