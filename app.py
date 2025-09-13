@@ -390,15 +390,25 @@ with tab_scan:
     
     category_tabs = st.tabs(["Digit", "Jumlah", "BBFS", "Shio", "Jalur Main"])
     with category_tabs[0]:
-        cols = st.columns(len(DIGIT_LABELS)); [create_scan_button(label, c) for label, c in zip(DIGIT_LABELS, cols)]
+        cols = st.columns(len(DIGIT_LABELS))
+        for label, container in zip(DIGIT_LABELS, cols):
+            create_scan_button(label, container)
     with category_tabs[1]:
-        cols = st.columns(len(JUMLAH_LABELS)); [create_scan_button(label, c) for label, c in zip(JUMLAH_LABELS, cols)]
+        cols = st.columns(len(JUMLAH_LABELS))
+        for label, container in zip(JUMLAH_LABELS, cols):
+            create_scan_button(label, container)
     with category_tabs[2]:
-        cols = st.columns(len(BBFS_LABELS)); [create_scan_button(label, c) for label, c in zip(BBFS_LABELS, cols)]
+        cols = st.columns(len(BBFS_LABELS))
+        for label, container in zip(BBFS_LABELS, cols):
+            create_scan_button(label, container)
     with category_tabs[3]:
-        cols = st.columns(len(SHIO_LABELS)); [create_scan_button(label, c) for label, c in zip(SHIO_LABELS, cols)]
+        cols = st.columns(len(SHIO_LABELS))
+        for label, container in zip(SHIO_LABELS, cols):
+            create_scan_button(label, container)
     with category_tabs[4]:
-        cols = st.columns(len(JALUR_LABELS)); [create_scan_button(label, c) for label, c in zip(JALUR_LABELS, cols)]
+        cols = st.columns(len(JALUR_LABELS))
+        for label, container in zip(JALUR_LABELS, cols):
+            create_scan_button(label, container)
 
 with tab_auto_scan:
     st.subheader(f"Otomatisasi & Monitoring Scan untuk Mode {mode_angka}")
