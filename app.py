@@ -54,7 +54,7 @@ def generate_rekap_grid(dead_numbers):
     cols = st.columns(10)
     for i in range(100):
         num_str = f"{i:02d}"
-        background_color = "#E57373" if i in dead_numbers else "#4CAF50" # Merah jika mati, Hijau jika hidup
+        background_color = "#E57373" if i in dead_numbers else "#4CAF50"
         cols[i%10].markdown(f"<div style='background-color:{background_color}; color:white; text-align:center; padding:5px; border-radius:5px; margin:2px;'>{num_str}</div>", unsafe_allow_html=True)
 
 def run_rekap_filter(state):
@@ -63,22 +63,14 @@ def run_rekap_filter(state):
     jumlah_off = parse_input_numbers(state.get('rekap_jumlah_off', ''))
     shio_off = parse_input_numbers(state.get('rekap_shio_off', ''))
     ln_off = parse_input_numbers(state.get('rekap_ln_off', ''))
-    
     for shio_num in shio_off:
         if shio_num in SHIO_MAP: ln_off.update(SHIO_MAP[shio_num])
-
     live_numbers, dead_numbers = [], set()
     for num in range(100):
         kepala, ekor, jumlah = num // 10, num % 10, (num // 10 + num % 10) % 10
-        is_dead = False
-        if kepala in kepala_off: is_dead = True
-        if ekor in ekor_off: is_dead = True
-        if jumlah in jumlah_off: is_dead = True
-        if num in ln_off: is_dead = True
-        
+        is_dead = any([kepala in kepala_off, ekor in ekor_off, jumlah in jumlah_off, num in ln_off])
         if is_dead: dead_numbers.add(num)
         else: live_numbers.append(f"{num:02d}")
-            
     return live_numbers, dead_numbers
 
 @st.cache_resource
@@ -166,24 +158,49 @@ def build_tf_model(input_len, model_type, problem_type, num_classes):
     model = Model(inputs, outputs)
     return model, loss
 
+# --- FUNGSI PREDIKSI DIKEMBALIKAN ---
+def top_n_model(df, lokasi, window_dict, model_type, top_n):
+    results = []
+    loc_id = lokasi.lower().strip().replace(" ", "_")
+    all_models_exist = True
+    for label in DIGIT_LABELS:
+        model_path = f"saved_models/{loc_id}_{label}_{model_type}.h5"
+        if not os.path.exists(model_path):
+            st.error(f"Model untuk {label.upper()} tidak ditemukan. Silakan latih model terlebih dahulu di tab 'Manajemen Model'.")
+            all_models_exist = False
+    if not all_models_exist:
+        return None, "Model tidak lengkap."
+
+    with st.spinner("Memuat model dan menjalankan prediksi..."):
+        for label in DIGIT_LABELS:
+            ws = window_dict.get(label, 7)
+            if len(df) < ws:
+                st.error(f"Data tidak cukup untuk prediksi {label.upper()} (diperlukan {ws} baris, tersedia {len(df)}).")
+                return None, "Data tidak cukup."
+            X, _ = tf_preprocess_data(df, ws)
+            if X.shape[0] == 0:
+                st.error(f"Gagal memproses data untuk prediksi {label.upper()} dengan WS={ws}.")
+                return None, "Gagal memproses data."
+            
+            model_path = f"saved_models/{loc_id}_{label}_{model_type}.h5"
+            model = load_cached_model(model_path)
+            pred = model.predict(X[-1:], verbose=0)
+            top_digits = list(np.argsort(pred[0])[-top_n:][::-1])
+            results.append(top_digits)
+    return results, None
+
+
 def find_best_window_size(df, label, model_type, min_ws, max_ws, top_n, top_n_shio):
     from sklearn.model_selection import train_test_split
     from tensorflow.keras.callbacks import EarlyStopping
     from tensorflow.keras.metrics import TopKCategoricalAccuracy
     best_ws, best_score, table_data = None, -1, []
     is_jalur_scan = label in JALUR_LABELS
-    if is_jalur_scan:
-        pt, k, nc = "jalur_multiclass", 2, 3
-        cols = ["Window Size", "Prediksi", "Angka Jalur", "Angka Mati"]
-    elif label in BBFS_LABELS:
-        pt, k, nc = "multilabel", top_n, 10
-        cols = ["Window Size", f"Top-{k}", "Angka Mati"]
-    elif label in SHIO_LABELS:
-        pt, k, nc = "shio", top_n_shio, 12
-        cols = ["Window Size", f"Top-{k}", "Shio Mati"]
-    else: 
-        pt, k, nc = "multiclass", top_n, 10
-        cols = ["Window Size", f"Top-{k}", "Angka Mati"]
+    if is_jalur_scan: pt, k, nc, cols = "jalur_multiclass", 2, 3, ["Window Size", "Prediksi", "Angka Jalur", "Angka Mati"]
+    elif label in BBFS_LABELS: pt, k, nc, cols = "multilabel", top_n, 10, ["Window Size", f"Top-{k}", "Angka Mati"]
+    elif label in SHIO_LABELS: pt, k, nc, cols = "shio", top_n_shio, 12, ["Window Size", f"Top-{k}", "Shio Mati"]
+    else: pt, k, nc, cols = "multiclass", top_n, 10, ["Window Size", f"Top-{k}", "Angka Mati"]
+        
     bar = st.progress(0, text=f"Memulai Scan {label.upper()}... [0%]")
     total_ws = (max_ws - min_ws) + 1
     for i, ws in enumerate(range(min_ws, max_ws + 1)):
@@ -194,6 +211,7 @@ def find_best_window_size(df, label, model_type, min_ws, max_ws, top_n, top_n_sh
             if is_jalur_scan: X, y = tf_preprocess_data_for_jalur(df, ws, label.split('_')[1])
             else: X, y_dict = tf_preprocess_data(df, ws); y = y_dict.get(label)
             if X.shape[0] < 10: continue
+            
             X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
             model, loss = build_tf_model(X.shape[1], model_type, 'multiclass' if is_jalur_scan else pt, nc)
             metrics = ['accuracy']
@@ -201,12 +219,12 @@ def find_best_window_size(df, label, model_type, min_ws, max_ws, top_n, top_n_sh
             model.compile(optimizer="adam", loss=loss, metrics=metrics)
             model.fit(X_train, y_train, epochs=15, batch_size=32, validation_data=(X_val, y_val), callbacks=[EarlyStopping(monitor='val_loss', patience=3)], verbose=0)
             evals = model.evaluate(X_val, y_val, verbose=0); preds = model.predict(X_val, verbose=0)
+            
             if is_jalur_scan:
                 top_indices = np.argsort(preds[-1])[::-1][:2]
                 pred_str = f"{top_indices[0] + 1}-{top_indices[1] + 1}"
                 angka_jalur_str = f"Jalur {top_indices[0] + 1} => {JALUR_ANGKA_MAP[top_indices[0] + 1]}\n\nJalur {top_indices[1] + 1} => {JALUR_ANGKA_MAP[top_indices[1] + 1]}"
-                all_jalur = {1, 2, 3}
-                predicted_jalur = {top_indices[0] + 1, top_indices[1] + 1}
+                all_jalur = {1, 2, 3}; predicted_jalur = {top_indices[0] + 1, top_indices[1] + 1}
                 jalur_mati = list(all_jalur - predicted_jalur)[0]
                 angka_mati_str = JALUR_ANGKA_MAP[jalur_mati]
                 score = (evals[1] * 0.3) + (evals[2] * 0.7)
@@ -214,15 +232,10 @@ def find_best_window_size(df, label, model_type, min_ws, max_ws, top_n, top_n_sh
             else:
                 avg_conf = np.mean(np.sort(preds, axis=1)[:, -k:])*100
                 top_indices = np.argsort(preds[-1])[::-1][:k]
-                if pt == "shio":
-                    all_numbers = set(range(1, 13))
-                    top_numbers = set(top_indices + 1)
-                else: 
-                    all_numbers = set(range(10))
-                    top_numbers = set(top_indices)
+                if pt == "shio": all_numbers, top_numbers = set(range(1, 13)), set(top_indices + 1)
+                else: all_numbers, top_numbers = set(range(10)), set(top_indices)
                 off_numbers = all_numbers - top_numbers
-                pred_str = ", ".join(map(str, sorted(list(top_numbers))))
-                off_str = ", ".join(map(str, sorted(list(off_numbers))))
+                pred_str = ", ".join(map(str, sorted(list(top_numbers)))); off_str = ", ".join(map(str, sorted(list(off_numbers))))
                 score = (evals[1] * 0.7) + (avg_conf/100*0.3) if pt=='multilabel' else (evals[1]*0.2)+(evals[2]*0.5)+(avg_conf/100*0.3)
                 table_data.append((ws, pred_str, off_str))
             if score > best_score: best_score, best_ws = score, ws
@@ -337,7 +350,7 @@ with col2:
 active_list = st.session_state.angka_list if st.session_state.active_data == 'A' else st.session_state.angka_list_2
 df = pd.DataFrame({"angka": active_list})
 
-tab_scan, tab_auto_scan, tab_manajemen, tab_pembalik, tab_rekap_2d = st.tabs(["🪟 Scan Manual", "⚡ Scan Otomatis & Monitoring", "⚙️ Manajemen Model", "🔄 Pembalik Urutan", "🔢 Rekap Angka 2D"])
+tab_scan, tab_auto_scan, tab_manajemen, tab_pembalik, tab_rekap_2d, tab_prediksi = st.tabs(["🪟 Scan Manual", "⚡ Scan Otomatis & Monitoring", "⚙️ Manajemen Model", "🔄 Pembalik Urutan", "🔢 Rekap Angka 2D", "🔮 Prediksi & Hasil"])
 
 def display_scan_progress_and_results(df, model_type, min_ws, max_ws, jumlah_digit, jumlah_digit_shio):
     if st.session_state.current_scan_job and len(df) < max_ws + 10:
@@ -391,24 +404,19 @@ with tab_scan:
     category_tabs = st.tabs(["Digit", "Jumlah", "BBFS", "Shio", "Jalur Main"])
     with category_tabs[0]:
         cols = st.columns(len(DIGIT_LABELS))
-        for label, container in zip(DIGIT_LABELS, cols):
-            create_scan_button(label, container)
+        for label, container in zip(DIGIT_LABELS, cols): create_scan_button(label, container)
     with category_tabs[1]:
         cols = st.columns(len(JUMLAH_LABELS))
-        for label, container in zip(JUMLAH_LABELS, cols):
-            create_scan_button(label, container)
+        for label, container in zip(JUMLAH_LABELS, cols): create_scan_button(label, container)
     with category_tabs[2]:
         cols = st.columns(len(BBFS_LABELS))
-        for label, container in zip(BBFS_LABELS, cols):
-            create_scan_button(label, container)
+        for label, container in zip(BBFS_LABELS, cols): create_scan_button(label, container)
     with category_tabs[3]:
         cols = st.columns(len(SHIO_LABELS))
-        for label, container in zip(SHIO_LABELS, cols):
-            create_scan_button(label, container)
+        for label, container in zip(SHIO_LABELS, cols): create_scan_button(label, container)
     with category_tabs[4]:
         cols = st.columns(len(JALUR_LABELS))
-        for label, container in zip(JALUR_LABELS, cols):
-            create_scan_button(label, container)
+        for label, container in zip(JALUR_LABELS, cols): create_scan_button(label, container)
 
 with tab_auto_scan:
     st.subheader(f"Otomatisasi & Monitoring Scan untuk Mode {mode_angka}")
@@ -499,3 +507,34 @@ with tab_rekap_2d:
         height=200,
         label_visibility="collapsed"
     )
+
+with tab_prediksi:
+    st.subheader("Prediksi Menggunakan Model AI Tersimpan")
+    st.info("Fitur ini akan menggunakan model AI yang telah Anda latih dan simpan di tab 'Manajemen Model' untuk menghasilkan prediksi.")
+
+    if st.button("🚀 Jalankan Prediksi", use_container_width=True, type="primary"):
+        min_required_data = max(window_per_digit.values())
+        if len(df) < min_required_data:
+            st.error(f"Data tidak cukup untuk menjalankan prediksi. Model memerlukan setidaknya {min_required_data} baris data berdasarkan WS di sidebar.")
+        else:
+            result, error_msg = top_n_model(df, selected_lokasi, window_per_digit, model_type, jumlah_digit)
+            
+            if error_msg:
+                pass 
+            elif result:
+                st.success("Prediksi berhasil dibuat!")
+                st.subheader(f"🎯 Hasil Prediksi Top {jumlah_digit}")
+                
+                cols = st.columns(len(DIGIT_LABELS))
+                for i, label in enumerate(DIGIT_LABELS):
+                    with cols[i]:
+                        st.metric(label.capitalize(), ", ".join(map(str, result[i])))
+                
+                st.divider()
+
+                all_combinations = list(product(*result))
+                mode_digit_count = {"2D": 2, "3D": 3, "4D": 4}[mode_angka]
+                st.subheader(f"🔢 Semua Kombinasi {mode_angka} ({len(all_combinations)} Line)")
+                
+                combinations_str = " ".join(["".join(map(str, combo))[-mode_digit_count:] for combo in all_combinations])
+                st.text_area("Kombinasi Penuh", combinations_str, height=300)
