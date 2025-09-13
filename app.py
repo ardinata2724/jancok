@@ -297,13 +297,18 @@ with st.sidebar:
     putaran = st.number_input("🔁 Jumlah Putaran Terakhir", 10, 1000, 100)
     mode_angka = st.radio("Mode", ("2D", "3D", "4D"), horizontal=True, key="mode_angka_selector")
     st.markdown("---")
-    st.markdown("### 🎯 Opsi Prediksi")
+    st.markdown("### 🎯 Opsi Prediksi & Scan")
     jumlah_digit = st.slider("🔢 Jumlah Digit Prediksi", 1, 9, 9)
     jumlah_digit_shio = st.slider("🐉 Jumlah Digit Prediksi Khusus Shio", 1, 12, 11)
     use_transformer = st.checkbox("🤖 Gunakan Transformer", value=True)
     model_type = "transformer" if use_transformer else "lstm"
     st.markdown("---")
-    st.markdown("### 🪟 Window Size per Digit")
+    st.markdown("### 🪟 Pengaturan Window Size (WS)")
+    # --- PERUBAHAN: Pengaturan Min/Max WS dipindah ke sidebar ---
+    min_ws = st.number_input("Min WS", 1, 99, 5)
+    max_ws = st.number_input("Max WS", 1, 100, 31)
+    st.markdown("---")
+    st.markdown("### 🪟 WS per Digit (Training)")
     window_per_digit = {label: st.number_input(f"{label.upper()}", 1, 100, 7, key=f"win_{label}") for label in DIGIT_LABELS}
 
 def get_file_name_from_lokasi(lokasi):
@@ -321,7 +326,6 @@ if st.button("Ambil Data dari Keluaran Angka", use_container_width=True):
     file_path = os.path.join(folder_data, base_filename)
     try:
         with open(file_path, 'r') as f: lines = f.readlines()
-        # --- PERUBAHAN LOGIKA: Selalu ambil 4 digit, abaikan mode ---
         angka_from_file = [line.strip()[-4:] for line in lines[-putaran:] if line.strip() and line.strip()[-4:].isdigit()]
         if angka_from_file:
             target_list = 'angka_list' if st.session_state.active_data == 'A' else 'angka_list_2'
@@ -363,8 +367,8 @@ def display_scan_progress_and_results(df, model_type, min_ws, max_ws, jumlah_dig
     if st.session_state.current_scan_job:
         label = st.session_state.current_scan_job
         if len(df) < max_ws + 10:
-            st.error(f"Data tidak cukup untuk scan {label.upper()}. Tugas dibatalkan.")
-            st.session_state.current_scan_job = None; time.sleep(2); st.rerun()
+            st.error(f"Data tidak cukup untuk scan (diperlukan > {max_ws + 10} baris). Tugas dibatalkan.")
+            st.session_state.current_scan_job = None; time.sleep(3); st.rerun()
         else:
             st.warning(f"⏳ Sedang menjalankan scan untuk **{label.replace('_', ' ').upper()}**...")
             best_ws, result_table = find_best_window_size(df, label, model_type, min_ws, max_ws, jumlah_digit, jumlah_digit_shio)
@@ -373,8 +377,7 @@ def display_scan_progress_and_results(df, model_type, min_ws, max_ws, jumlah_dig
             st.rerun()
 
     if st.session_state.scan_outputs:
-        st.markdown("---")
-        st.subheader("✅ Hasil Scan Selesai")
+        st.markdown("---"); st.subheader("✅ Hasil Scan Selesai")
         display_order = DIGIT_LABELS + JUMLAH_LABELS + BBFS_LABELS + SHIO_LABELS + JALUR_LABELS
         for label in display_order:
             if label in st.session_state.scan_outputs:
@@ -383,10 +386,8 @@ def display_scan_progress_and_results(df, model_type, min_ws, max_ws, jumlah_dig
                     result_df = data.get("table")
                     if result_df is not None and not result_df.empty:
                         st.dataframe(result_df, use_container_width=True)
-                        if data["ws"] is not None:
-                            st.info(f"💡 **WS terbaik yang ditemukan: {data['ws']}**")
-                        relevant_columns_exist = "Angka Mati" in result_df.columns or "Shio Mati" in result_df.columns
-                        if relevant_columns_exist:
+                        if data["ws"] is not None: st.info(f"💡 **WS terbaik yang ditemukan: {data['ws']}**")
+                        if "Angka Mati" in result_df.columns or "Shio Mati" in result_df.columns:
                             if st.button(f"📊 Buka Rekap 2D untuk {label.replace('_', ' ').upper()}", key=f"rekap_btn_{label}", use_container_width=True):
                                 st.session_state.active_rekap = label
                                 for key in rekap_inputs: st.session_state[key] = rekap_inputs[key]
@@ -402,41 +403,26 @@ def display_scan_progress_and_results(df, model_type, min_ws, max_ws, jumlah_dig
         with st.container(border=True):
             st.subheader(f"📝 Rekap Angka 2D (berdasarkan hasil: {active_label.replace('_',' ').upper()})")
             with st.form(key="rekap_form"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.text_input("Kepala Off", key='rekap_kepala_off', help="...")
-                    st.text_input("Shio Off", key='rekap_shio_off', help="...")
-                    c1, c2 = st.columns(2)
-                    c1.selectbox("Kepala", ["Semua", "Besar", "Kecil"], key="rekap_k_besar_kecil")
-                    c2.selectbox("Kepala", ["Semua", "Ganjil", "Genap"], key="rekap_k_ganjil_genap", label_visibility="hidden")
-                with col2:
-                    st.text_input("Ekor Off", key='rekap_ekor_off', help="...")
-                    st.text_input("Jumlah Off (0-9)", key='rekap_jumlah_off', help="...")
-                    c3, c4 = st.columns(2)
-                    c3.selectbox("Ekor", ["Semua", "Besar", "Kecil"], key="rekap_e_besar_kecil")
-                    c4.selectbox("Ekor", ["Semua", "Ganjil", "Genap"], key="rekap_e_ganjil_genap", label_visibility="hidden")
-                st.text_area("LN OFF", key='rekap_ln_off', help="...")
-                submit_col, reset_col, close_col = st.columns(3)
-                submitted = submit_col.form_submit_button("✅ Generate", use_container_width=True, type="primary")
-                if reset_col.form_submit_button("🔄 Reset", use_container_width=True):
-                    for key in rekap_inputs: st.session_state[key] = rekap_inputs[key]
-                    st.session_state.rekap_results = {}; st.rerun()
-            if close_col.button("❌ Tutup Rekap", use_container_width=True):
-                st.session_state.active_rekap, st.session_state.rekap_results = None, {}; st.rerun()
+                c1,c2=st.columns(2); c1.text_input("Kepala Off",key='rekap_kepala_off'); c1.text_input("Shio Off",key='rekap_shio_off')
+                sc1,sc2=c1.columns(2); sc1.selectbox("Kepala",["Semua","Besar","Kecil"],key="rekap_k_besar_kecil"); sc2.selectbox("Kepala",["Semua","Ganjil","Genap"],key="rekap_k_ganjil_genap",label_visibility="hidden")
+                c2.text_input("Ekor Off",key='rekap_ekor_off'); c2.text_input("Jumlah Off (0-9)",key='rekap_jumlah_off')
+                sc3,sc4=c2.columns(2); sc3.selectbox("Ekor",["Semua","Besar","Kecil"],key="rekap_e_besar_kecil"); sc4.selectbox("Ekor",["Semua","Ganjil","Genap"],key="rekap_e_ganjil_genap",label_visibility="hidden")
+                st.text_area("LN OFF", key='rekap_ln_off')
+                s_col,r_col,c_col=st.columns(3); submitted=s_col.form_submit_button("✅ Generate",use_container_width=True,type="primary")
+                if r_col.form_submit_button("🔄 Reset",use_container_width=True):
+                    for key in rekap_inputs:st.session_state[key]=rekap_inputs[key]
+                    st.session_state.rekap_results={}; st.rerun()
+            if c_col.button("❌ Tutup Rekap",use_container_width=True): st.session_state.active_rekap,st.session_state.rekap_results=None,{}; st.rerun()
             if submitted:
-                live_numbers, dead_numbers = run_rekap_filter(st.session_state)
-                st.session_state.rekap_results = {"live": live_numbers, "grid": generate_rekap_grid(dead_numbers)}; st.rerun()
+                live,dead=run_rekap_filter(st.session_state); st.session_state.rekap_results={"live":live,"grid":generate_rekap_grid(dead)}; st.rerun()
             if st.session_state.rekap_results:
-                st.markdown("##### LN Dasar"); st.markdown(st.session_state.rekap_results.get("grid", ""), unsafe_allow_html=True)
-                st.markdown("---")
-                live_nums = st.session_state.rekap_results.get("live", [])
-                st.markdown(f"##### LN TOP = {len(live_nums)} LN")
-                st.text_area("Angka Hidup", value="*".join(live_nums), height=200, label_visibility="collapsed")
+                st.markdown("##### LN Dasar"); st.markdown(st.session_state.rekap_results.get("grid",""),unsafe_allow_html=True); st.markdown("---")
+                live_nums=st.session_state.rekap_results.get("live",[]); st.markdown(f"##### LN TOP = {len(live_nums)} LN")
+                st.text_area("Angka Hidup",value="*".join(live_nums),height=200,label_visibility="collapsed")
 
 with tab_scan:
     st.subheader("Pencarian Window Size (WS) Optimal per Kategori (Manual)")
-    scan_cols = st.columns(2)
-    min_ws, max_ws = scan_cols[0].number_input("Min WS", 1, 99, 5), scan_cols[1].number_input("Max WS", 1, 100, 31)
+    st.info("Atur rentang Min dan Max WS di sidebar. Pastikan jumlah data lebih besar dari Max WS + 10.")
     if st.button("❌ Hapus Hasil Scan"):
         st.session_state.scan_outputs, st.session_state.active_rekap = {}, None
         st.rerun()
@@ -449,34 +435,29 @@ with tab_scan:
     category_tabs = st.tabs(["Digit", "Jumlah", "BBFS", "Shio", "Jalur Main"])
     with category_tabs[0]:
         cols = st.columns(len(DIGIT_LABELS))
-        for label, container in zip(DIGIT_LABELS, cols):
-            create_scan_button(label, container)
+        for label, container in zip(DIGIT_LABELS, cols): create_scan_button(label, container)
     with category_tabs[1]:
         cols = st.columns(len(JUMLAH_LABELS))
-        for label, container in zip(JUMLAH_LABELS, cols):
-            create_scan_button(label, container)
+        for label, container in zip(JUMLAH_LABELS, cols): create_scan_button(label, container)
     with category_tabs[2]:
         cols = st.columns(len(BBFS_LABELS))
-        for label, container in zip(BBFS_LABELS, cols):
-            create_scan_button(label, container)
+        for label, container in zip(BBFS_LABELS, cols): create_scan_button(label, container)
     with category_tabs[3]:
         cols = st.columns(len(SHIO_LABELS))
-        for label, container in zip(SHIO_LABELS, cols):
-            create_scan_button(label, container)
+        for label, container in zip(SHIO_LABELS, cols): create_scan_button(label, container)
     with category_tabs[4]:
         cols = st.columns(len(JALUR_LABELS))
-        for label, container in zip(JALUR_LABELS, cols):
-            create_scan_button(label, container)
+        for label, container in zip(JALUR_LABELS, cols): create_scan_button(label, container)
     st.divider()
     display_scan_progress_and_results(df, model_type, min_ws, max_ws, jumlah_digit, jumlah_digit_shio)
 
 with tab_auto_scan:
     st.subheader(f"Otomatisasi Scan Window Size untuk Mode {mode_angka}")
-    st.info("Fitur ini akan menjalankan serangkaian proses scan WS yang relevan untuk mode yang Anda pilih di sidebar.")
+    st.info("Fitur ini akan menjalankan serangkaian proses scan WS yang relevan untuk mode yang Anda pilih di sidebar. Pastikan jumlah data mencukupi.")
     is_scanning = bool(st.session_state.scan_queue or st.session_state.current_scan_job)
     if st.button(f"🚀 Jalankan Scan Otomatis {mode_angka}", use_container_width=True, type="primary", disabled=is_scanning):
         scan_jobs = []
-        if mode_angka == '2D': scan_jobs = ['puluhan', 'satuan', 'jumlah_belakang', 'bbfs_puluhan-satuan', 'shio_belakang', 'jalur_puluhan-satuan']
+        if mode_angka == '2D': scan_jobs = ['puluhan', 'satuan', 'jumlah_belakang', 'bbfs_puluhan_satuan', 'shio_belakang', 'jalur_puluhan-satuan']
         elif mode_angka == '3D': scan_jobs = ['ratusan', 'puluhan', 'satuan', 'jumlah_tengah', 'jumlah_belakang', 'bbfs_ratusan-puluhan', 'bbfs_puluhan-satuan', 'shio_tengah', 'shio_belakang', 'jalur_ratusan-puluhan', 'jalur_puluhan-satuan']
         elif mode_angka == '4D': scan_jobs = DIGIT_LABELS + JUMLAH_LABELS + BBFS_LABELS + SHIO_LABELS + JALUR_LABELS
         if scan_jobs:
