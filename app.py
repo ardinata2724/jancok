@@ -268,6 +268,10 @@ if 'active_data' not in st.session_state: st.session_state.active_data = 'A'
 if 'scan_outputs' not in st.session_state: st.session_state.scan_outputs = {}
 if 'scan_queue' not in st.session_state: st.session_state.scan_queue = []
 if 'current_scan_job' not in st.session_state: st.session_state.current_scan_job = None
+# --- PENAMBAHAN SESSION STATE UNTUK PEMBALIK URUTAN ---
+if 'data_asli_pembalik' not in st.session_state: st.session_state.data_asli_pembalik = ""
+if 'hasil_dibalik_pembalik' not in st.session_state: st.session_state.hasil_dibalik_pembalik = ""
+
 
 st.title("Prediksi 4D")
 st.caption("editing by: Andi Prediction")
@@ -366,8 +370,8 @@ with col2:
 active_list = st.session_state.angka_list if st.session_state.active_data == 'A' else st.session_state.angka_list_2
 df = pd.DataFrame({"angka": active_list})
 
-# --- PENAMBAHAN TAB SCAN OTOMATIS ---
-tab_scan, tab_auto_scan, tab_manajemen, tab_angka_main, tab_prediksi = st.tabs(["🪟 Scan Manual", "⚡ Scan Otomatis", "⚙️ Manajemen Model", "🎯 Angka Main", "🔮 Prediksi & Hasil"])
+# --- PENAMBAHAN TAB SCAN OTOMATIS & PEMBALIK URUTAN ---
+tab_scan, tab_auto_scan, tab_manajemen, tab_angka_main, tab_prediksi, tab_pembalik = st.tabs(["🪟 Scan Manual", "⚡ Scan Otomatis", "⚙️ Manajemen Model", "🎯 Angka Main", "🔮 Prediksi & Hasil", "🔄 Pembalik Urutan"])
 
 with tab_prediksi:
     if st.button("🚀 Jalankan Prediksi", use_container_width=True, type="primary"):
@@ -383,6 +387,48 @@ with tab_prediksi:
                 st.subheader(f"🔢 Semua Kombinasi {digit_count}D ({len(all_combinations)} Line)")
                 st.text_area("Kombinasi Penuh", " * ".join(["".join(map(str, combo))[-digit_count:] for combo in all_combinations]), height=300)
         else: st.warning("❌ Data tidak cukup untuk prediksi.")
+
+# --- KONTEN TAB PEMBALIK URUTAN BARU ---
+with tab_pembalik:
+    st.subheader("Aplikasi Pembalik Urutan")
+    st.caption("Tempel daftar angka atau teks Anda di bawah untuk membalik urutannya dari bawah ke atas.")
+
+    col1_pembalik, col2_pembalik = st.columns(2)
+
+    with col1_pembalik:
+        st.text_area(
+            "Data Asli",
+            height=350,
+            key="data_asli_pembalik"
+        )
+
+    with col2_pembalik:
+        st.text_area(
+            "Hasil Dibalik",
+            value=st.session_state.hasil_dibalik_pembalik,
+            height=350,
+            disabled=True
+        )
+
+    btn_col1, btn_col2, btn_col3 = st.columns(3)
+
+    with btn_col1:
+        if st.button("Balikkan Urutan!", use_container_width=True, type="primary"):
+            if st.session_state.data_asli_pembalik:
+                lines = st.session_state.data_asli_pembalik.splitlines()
+                reversed_lines = lines[::-1]
+                st.session_state.hasil_dibalik_pembalik = "\n".join(reversed_lines)
+                st.rerun()
+
+    with btn_col2:
+        if st.button("Salin Hasil", use_container_width=True):
+             st.toast("💡 Silakan salin teks dari kotak 'Hasil Dibalik' secara manual (Ctrl+C).")
+
+    with btn_col3:
+        if st.button("Bersihkan", use_container_width=True):
+            st.session_state.data_asli_pembalik = ""
+            st.session_state.hasil_dibalik_pembalik = ""
+            st.rerun()
 
 with tab_manajemen:
     st.subheader("Manajemen Model AI")
