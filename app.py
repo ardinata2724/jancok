@@ -284,9 +284,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 🎯 Opsi Prediksi")
     jumlah_digit = st.slider("🔢 Jumlah Digit Prediksi", 1, 9, 9)
-    # --- PERUBAHAN: Nilai default diubah dari 12 menjadi 11 ---
     jumlah_digit_shio = st.slider("🐉 Jumlah Digit Prediksi Khusus Shio", 1, 12, 11)
-    # --- AKHIR PERUBAHAN ---
     metode = st.selectbox("🧠 Metode", ["Markov", "LSTM AI"])
     use_transformer = st.checkbox("🤖 Gunakan Transformer", value=True)
     model_type = "transformer" if use_transformer else "lstm"
@@ -338,7 +336,10 @@ with col1:
         "\n".join(st.session_state.angka_list),
         height=300,
         key="manual_data_input_1",
-        label_visibility="collapsed"
+        label_visibility="collapsed",
+        # --- PERUBAHAN: Tambahkan parameter disabled ---
+        disabled=(st.session_state.active_data != 'A')
+        # --- AKHIR PERUBAHAN ---
     )
     # --- LOGIKA INPUT MANUAL TIDAK BERUBAH (TETAP 4 DIGIT) SESUAI PERMINTAAN ---
     if riwayat_text_1 != "\n".join(st.session_state.angka_list):
@@ -352,7 +353,10 @@ with col2:
         "\n".join(st.session_state.angka_list_2),
         height=300,
         key="manual_data_input_2",
-        label_visibility="collapsed"
+        label_visibility="collapsed",
+        # --- PERUBAHAN: Tambahkan parameter disabled ---
+        disabled=(st.session_state.active_data != 'B')
+        # --- AKHIR PERUBAHAN ---
     )
     # --- LOGIKA INPUT MANUAL TIDAK BERUBAH (TETAP 4 DIGIT) SESUAI PERMINTAAN ---
     if riwayat_text_2 != "\n".join(st.session_state.angka_list_2):
