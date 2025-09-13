@@ -8,10 +8,28 @@ from collections import defaultdict, Counter
 from itertools import product
 from datetime import datetime
 import re
+import tensorflow as tf
 
 # ==============================================================================
-# BAGIAN 1: FUNGSI-FUNGSI INTI
+# BAGIAN 1: FUNGSI-FUNGSI & DEFINISI KELAS INTI
 # ==============================================================================
+
+# --- PERBAIKAN: Mendefinisikan Class di level atas agar stabil saat disimpan/dimuat ---
+class PositionalEncoding(tf.keras.layers.Layer):
+    def call(self, x):
+        seq_len, d_model = tf.shape(x)[1], tf.shape(x)[2]
+        pos = tf.cast(tf.range(seq_len)[:, tf.newaxis], dtype=tf.float32)
+        i = tf.cast(tf.range(d_model)[tf.newaxis, :], dtype=tf.float32)
+        angle_rates = 1 / tf.pow(10000.0, (2 * (i // 2)) / tf.cast(d_model, tf.float32))
+        angle_rads = pos * angle_rates
+        sines, cosines = tf.math.sin(angle_rads[:, 0::2]), tf.math.cos(angle_rads[:, 1::2])
+        pos_encoding = tf.concat([sines, cosines], axis=-1)
+        return x + tf.cast(tf.expand_dims(pos_encoding, 0), tf.float32)
+    
+    def get_config(self):
+        config = super().get_config()
+        return config
+
 DIGIT_LABELS = ["ribuan", "ratusan", "puluhan", "satuan"]
 BBFS_LABELS = ["bbfs_ribuan-ratusan", "bbfs_ratusan-puluhan", "bbfs_puluhan-satuan"]
 JUMLAH_LABELS = ["jumlah_depan", "jumlah_tengah", "jumlah_belakang"]
@@ -74,30 +92,8 @@ def run_rekap_filter(state):
     return live_numbers, dead_numbers
 
 @st.cache_resource
-def _get_positional_encoding_layer():
-    import tensorflow as tf
-    class PositionalEncoding(tf.keras.layers.Layer):
-        def call(self, x):
-            seq_len, d_model = tf.shape(x)[1], tf.shape(x)[2]
-            pos = tf.cast(tf.range(seq_len)[:, tf.newaxis], dtype=tf.float32)
-            i = tf.cast(tf.range(d_model)[tf.newaxis, :], dtype=tf.float32)
-            angle_rates = 1 / tf.pow(10000.0, (2 * (i // 2)) / tf.cast(d_model, tf.float32))
-            angle_rads = pos * angle_rates
-            sines, cosines = tf.math.sin(angle_rads[:, 0::2]), tf.math.cos(angle_rads[:, 1::2])
-            pos_encoding = tf.concat([sines, cosines], axis=-1)
-            return x + tf.cast(tf.expand_dims(pos_encoding, 0), tf.float32)
-        
-        # --- PERBAIKAN: Menambahkan get_config agar model bisa disimpan & dimuat dengan benar ---
-        def get_config(self):
-            config = super().get_config()
-            return config
-            
-    return PositionalEncoding
-
-@st.cache_resource
 def load_cached_model(model_path):
     from tensorflow.keras.models import load_model
-    PositionalEncoding = _get_positional_encoding_layer()
     if os.path.exists(model_path):
         try:
             return load_model(model_path, custom_objects={"PositionalEncoding": PositionalEncoding})
@@ -153,7 +149,6 @@ def tf_preprocess_data_for_jalur(df, window_size, target_position):
 def build_tf_model(input_len, model_type, problem_type, num_classes):
     from tensorflow.keras.models import Model
     from tensorflow.keras.layers import Input, Embedding, Bidirectional, LSTM, Dropout, Dense, LayerNormalization, MultiHeadAttention, GlobalAveragePooling1D
-    PositionalEncoding = _get_positional_encoding_layer()
     inputs = Input(shape=(input_len,)); x = Embedding(10, 64)(inputs); x = PositionalEncoding()(x)
     if model_type == "transformer":
         attn = MultiHeadAttention(num_heads=4, key_dim=64)(x, x); x = LayerNormalization()(x + attn)
@@ -190,7 +185,7 @@ def top_n_model(df, lokasi, window_dict, model_type, top_n):
             model_path = f"saved_models/{loc_id}_{label}_{model_type}.h5"
             model = load_cached_model(model_path)
             
-            if model is None: # Tambahan pengecekan jika model gagal dimuat
+            if model is None: 
                 return None, "Model gagal dimuat."
 
             pred = model.predict(X[-1:], verbose=0)
@@ -412,15 +407,20 @@ with tab_scan:
     
     category_tabs = st.tabs(["Digit", "Jumlah", "BBFS", "Shio", "Jalur Main"])
     with category_tabs[0]:
-        cols = st.columns(len(DIGIT_LABELS)); [create_scan_button(label, c) for label, c in zip(DIGIT_LABELS, cols)]
+        cols = st.columns(len(DIGIT_LABELS))
+        for label, container in zip(DIGIT_LABELS, cols): create_scan_button(label, container)
     with category_tabs[1]:
-        cols = st.columns(len(JUMLAH_LABELS)); [create_scan_button(label, c) for label, c in zip(JUMLAH_LABELS, cols)]
+        cols = st.columns(len(JUMLAH_LABELS))
+        for label, container in zip(JUMLAH_LABELS, cols): create_scan_button(label, container)
     with category_tabs[2]:
-        cols = st.columns(len(BBFS_LABELS)); [create_scan_button(label, c) for label, c in zip(BBFS_LABELS, cols)]
+        cols = st.columns(len(BBFS_LABELS))
+        for label, container in zip(BBFS_LABELS, cols): create_scan_button(label, container)
     with category_tabs[3]:
-        cols = st.columns(len(SHIO_LABELS)); [create_scan_button(label, c) for label, c in zip(SHIO_LABELS, cols)]
+        cols = st.columns(len(SHIO_LABELS))
+        for label, container in zip(SHIO_LABELS, cols): create_scan_button(label, container)
     with category_tabs[4]:
-        cols = st.columns(len(JALUR_LABELS)); [create_scan_button(label, c) for label, c in zip(JALUR_LABELS, cols)]
+        cols = st.columns(len(JALUR_LABELS))
+        for label, container in zip(JALUR_LABELS, cols): create_scan_button(label, container)
 
 with tab_auto_scan:
     st.subheader(f"Otomatisasi & Monitoring Scan untuk Mode {mode_angka}")
