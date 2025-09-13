@@ -86,6 +86,12 @@ def _get_positional_encoding_layer():
             sines, cosines = tf.math.sin(angle_rads[:, 0::2]), tf.math.cos(angle_rads[:, 1::2])
             pos_encoding = tf.concat([sines, cosines], axis=-1)
             return x + tf.cast(tf.expand_dims(pos_encoding, 0), tf.float32)
+        
+        # --- PERBAIKAN: Menambahkan get_config agar model bisa disimpan & dimuat dengan benar ---
+        def get_config(self):
+            config = super().get_config()
+            return config
+            
     return PositionalEncoding
 
 @st.cache_resource
@@ -158,7 +164,6 @@ def build_tf_model(input_len, model_type, problem_type, num_classes):
     model = Model(inputs, outputs)
     return model, loss
 
-# --- FUNGSI PREDIKSI DIKEMBALIKAN ---
 def top_n_model(df, lokasi, window_dict, model_type, top_n):
     results = []
     loc_id = lokasi.lower().strip().replace(" ", "_")
@@ -184,6 +189,10 @@ def top_n_model(df, lokasi, window_dict, model_type, top_n):
             
             model_path = f"saved_models/{loc_id}_{label}_{model_type}.h5"
             model = load_cached_model(model_path)
+            
+            if model is None: # Tambahan pengecekan jika model gagal dimuat
+                return None, "Model gagal dimuat."
+
             pred = model.predict(X[-1:], verbose=0)
             top_digits = list(np.argsort(pred[0])[-top_n:][::-1])
             results.append(top_digits)
@@ -403,20 +412,15 @@ with tab_scan:
     
     category_tabs = st.tabs(["Digit", "Jumlah", "BBFS", "Shio", "Jalur Main"])
     with category_tabs[0]:
-        cols = st.columns(len(DIGIT_LABELS))
-        for label, container in zip(DIGIT_LABELS, cols): create_scan_button(label, container)
+        cols = st.columns(len(DIGIT_LABELS)); [create_scan_button(label, c) for label, c in zip(DIGIT_LABELS, cols)]
     with category_tabs[1]:
-        cols = st.columns(len(JUMLAH_LABELS))
-        for label, container in zip(JUMLAH_LABELS, cols): create_scan_button(label, container)
+        cols = st.columns(len(JUMLAH_LABELS)); [create_scan_button(label, c) for label, c in zip(JUMLAH_LABELS, cols)]
     with category_tabs[2]:
-        cols = st.columns(len(BBFS_LABELS))
-        for label, container in zip(BBFS_LABELS, cols): create_scan_button(label, container)
+        cols = st.columns(len(BBFS_LABELS)); [create_scan_button(label, c) for label, c in zip(BBFS_LABELS, cols)]
     with category_tabs[3]:
-        cols = st.columns(len(SHIO_LABELS))
-        for label, container in zip(SHIO_LABELS, cols): create_scan_button(label, container)
+        cols = st.columns(len(SHIO_LABELS)); [create_scan_button(label, c) for label, c in zip(SHIO_LABELS, cols)]
     with category_tabs[4]:
-        cols = st.columns(len(JALUR_LABELS))
-        for label, container in zip(JALUR_LABELS, cols): create_scan_button(label, container)
+        cols = st.columns(len(JALUR_LABELS)); [create_scan_button(label, c) for label, c in zip(JALUR_LABELS, cols)]
 
 with tab_auto_scan:
     st.subheader(f"Otomatisasi & Monitoring Scan untuk Mode {mode_angka}")
