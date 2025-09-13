@@ -24,7 +24,6 @@ JALUR_ANGKA_MAP = {
     3: "03*15*27*39*51*63*75*87*99*06*18*30*42*54*66*78*90*09*21*33*45*57*69*81*93*12*24*36*48*60*72*84*96"
 }
 
-# --- FUNGSI DAN DATA BARU UNTUK REKAP 2D ---
 SHIO_MAP = {
     1: {1, 13, 25, 37, 49, 61, 73, 85, 97}, 2: {2, 14, 26, 38, 50, 62, 74, 86, 98},
     3: {3, 15, 27, 39, 51, 63, 75, 87, 99}, 4: {4, 16, 28, 40, 52, 64, 76, 88, 0},
@@ -55,10 +54,8 @@ def generate_rekap_grid(dead_numbers):
     cols = st.columns(10)
     for i in range(100):
         num_str = f"{i:02d}"
-        if i in dead_numbers:
-            cols[i%10].markdown(f"<div style='background-color:#E57373; color:white; text-align:center; padding:5px; border-radius:5px; margin:2px;'>{num_str}</div>", unsafe_allow_html=True)
-        else:
-            cols[i%10].markdown(f"<div style='background-color:#4CAF50; color:white; text-align:center; padding:5px; border-radius:5px; margin:2px;'>{num_str}</div>", unsafe_allow_html=True)
+        background_color = "#E57373" if i in dead_numbers else "#4CAF50" # Merah jika mati, Hijau jika hidup
+        cols[i%10].markdown(f"<div style='background-color:{background_color}; color:white; text-align:center; padding:5px; border-radius:5px; margin:2px;'>{num_str}</div>", unsafe_allow_html=True)
 
 def run_rekap_filter(state):
     kepala_off = parse_input_numbers(state.get('rekap_kepala_off', ''))
@@ -268,14 +265,11 @@ if 'scan_queue' not in st.session_state: st.session_state.scan_queue = []
 if 'current_scan_job' not in st.session_state: st.session_state.current_scan_job = None
 if 'data_asli_pembalik' not in st.session_state: st.session_state.data_asli_pembalik = ""
 if 'hasil_dibalik_pembalik' not in st.session_state: st.session_state.hasil_dibalik_pembalik = ""
-
-# --- Session State untuk Rekap 2D ---
-if 'rekap_results' not in st.session_state:
+if 'rekap_results' not in st.session_state or 'dead' not in st.session_state.rekap_results:
     st.session_state.rekap_results = {"live": [f"{i:02d}" for i in range(100)], "dead": set()}
 rekap_inputs = ['rekap_kepala_off', 'rekap_ekor_off', 'rekap_shio_off', 'rekap_jumlah_off', 'rekap_ln_off']
 for key in rekap_inputs:
-    if key not in st.session_state:
-        st.session_state[key] = ""
+    if key not in st.session_state: st.session_state[key] = ""
 
 st.title("Prediksi 4D")
 st.caption("editing by: Andi Prediction")
@@ -343,9 +337,7 @@ with col2:
 active_list = st.session_state.angka_list if st.session_state.active_data == 'A' else st.session_state.angka_list_2
 df = pd.DataFrame({"angka": active_list})
 
-# --- Definisi Tab Baru ---
 tab_scan, tab_auto_scan, tab_manajemen, tab_pembalik, tab_rekap_2d = st.tabs(["🪟 Scan Manual", "⚡ Scan Otomatis & Monitoring", "⚙️ Manajemen Model", "🔄 Pembalik Urutan", "🔢 Rekap Angka 2D"])
-
 
 def display_scan_progress_and_results(df, model_type, min_ws, max_ws, jumlah_digit, jumlah_digit_shio):
     if st.session_state.current_scan_job and len(df) < max_ws + 10:
@@ -445,7 +437,7 @@ with tab_manajemen:
 with tab_pembalik:
     st.subheader("Aplikasi Pembalik Urutan")
     st.caption("Tempel daftar angka atau teks Anda di bawah untuk membalik urutannya dari bawah ke atas.")
-    col1_pembalik, col2_pembalik = st.columns(2)
+    col1_pembalik, col2_pembali = st.columns(2)
     with col1_pembalik: st.text_area("Data Asli", height=350, key="data_asli_pembalik")
     with col2_pembalik: st.text_area("Hasil Dibalik", value=st.session_state.hasil_dibalik_pembalik, height=350, disabled=True)
     btn_col1, btn_col2, btn_col3 = st.columns(3)
@@ -462,45 +454,36 @@ with tab_pembalik:
             st.session_state.data_asli_pembalik, st.session_state.hasil_dibalik_pembalik = "", ""
             st.rerun()
 
-# --- KONTEN TAB REKAP 2D BARU ---
 with tab_rekap_2d:
     st.subheader("Rekap Angka 2D")
     st.caption("Alat bantu untuk menganalisa dan memfilter angka 2D.")
-
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns([1.2, 1.8])
     with col1:
-        with st.container(border=True):
-            st.text_input("Kepala Off", placeholder="misal: 123", key="rekap_kepala_off")
-            st.text_input("Ekor Off", placeholder="misal: 123", key="rekap_ekor_off")
-            st.text_input("Jumlah Off", placeholder="misal: 123", key="rekap_jumlah_off")
-            st.text_input("Shio Off", placeholder="misal: 11,12", key="rekap_shio_off")
-            st.text_area("LN OFF / jalur main off", placeholder="masukan LN off pisahkan dengan spasi, koma, atau *", key="rekap_ln_off")
-            
-            btn_col1, btn_col2 = st.columns(2)
-            if btn_col1.button("Generate", use_container_width=True, type="primary"):
-                live, dead = run_rekap_filter(st.session_state)
-                st.session_state.rekap_results = {"live": live, "dead": dead}
-                st.rerun()
-
-            if btn_col2.button("Reset", use_container_width=True):
-                for key in rekap_inputs:
-                    st.session_state[key] = ""
-                st.session_state.rekap_results = {"live": [f"{i:02d}" for i in range(100)], "dead": set()}
-                st.rerun()
+        st.text_input("Kepala Off", placeholder="misal: 1 2 3", key="rekap_kepala_off")
+        st.text_input("Ekor Off", placeholder="misal: 4 5 6", key="rekap_ekor_off")
+        st.text_input("Jumlah Off", placeholder="misal: 7 8", key="rekap_jumlah_off")
+        st.text_input("Shio Off", placeholder="misal: 11 12", key="rekap_shio_off")
+        st.text_area("LN OFF / jalur main off", placeholder="masukan LN off pisahkan dengan spasi, koma, atau *", key="rekap_ln_off")
+        
+        btn_col1, btn_col2 = st.columns(2)
+        if btn_col1.button("Generate", use_container_width=True, type="primary"):
+            live, dead = run_rekap_filter(st.session_state)
+            st.session_state.rekap_results = {"live": live, "dead": dead}
+        
+        if btn_col2.button("Reset", use_container_width=True):
+            for key in rekap_inputs: st.session_state[key] = ""
+            st.session_state.rekap_results = {"live": [f"{i:02d}" for i in range(100)], "dead": set()}
     
     with col2:
-        with st.container(border=True):
-            st.markdown("<h5 style='text-align: center;'>Papan Angka</h5>", unsafe_allow_html=True)
-            generate_rekap_grid(st.session_state.rekap_results['dead'])
+        st.markdown("<h5 style='text-align: center;'>Papan Angka</h5>", unsafe_allow_html=True)
+        generate_rekap_grid(st.session_state.rekap_results.get('dead', set()))
 
     st.markdown("---")
-
-    with st.container(border=True):
-        live_numbers = st.session_state.rekap_results['live']
-        st.subheader(f"Hasil Rekap ({len(live_numbers)} LN)")
-        st.text_area(
-            "Hasil Rekap", 
-            value="*".join(live_numbers), 
-            height=200,
-            label_visibility="collapsed"
-            )
+    live_numbers = st.session_state.rekap_results.get('live', [])
+    st.subheader(f"Hasil Rekap ({len(live_numbers)} LN)")
+    st.text_area(
+        "Hasil Rekap", 
+        value="*".join(live_numbers), 
+        height=200,
+        label_visibility="collapsed"
+    )
