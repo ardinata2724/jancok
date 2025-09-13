@@ -306,8 +306,6 @@ with st.sidebar:
     st.markdown("### 🪟 Window Size per Digit")
     window_per_digit = {label: st.number_input(f"{label.upper()}", 1, 100, 7, key=f"win_{label}") for label in DIGIT_LABELS}
 
-digit_count = {"2D": 2, "3D": 3, "4D": 4}[mode_angka]
-
 def get_file_name_from_lokasi(lokasi):
     cleaned_lokasi = lokasi.lower().replace(" ", "")
     if "hongkonglotto" in cleaned_lokasi: return "keluaran hongkong lotto.txt"
@@ -323,7 +321,8 @@ if st.button("Ambil Data dari Keluaran Angka", use_container_width=True):
     file_path = os.path.join(folder_data, base_filename)
     try:
         with open(file_path, 'r') as f: lines = f.readlines()
-        angka_from_file = [line.strip()[-digit_count:] for line in lines[-putaran:] if line.strip() and line.strip()[-digit_count:].isdigit()]
+        # --- PERUBAHAN LOGIKA: Selalu ambil 4 digit, abaikan mode ---
+        angka_from_file = [line.strip()[-4:] for line in lines[-putaran:] if line.strip() and line.strip()[-4:].isdigit()]
         if angka_from_file:
             target_list = 'angka_list' if st.session_state.active_data == 'A' else 'angka_list_2'
             st.session_state[target_list] = angka_from_file
