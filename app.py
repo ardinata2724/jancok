@@ -437,9 +437,11 @@ with tab_manajemen:
 with tab_pembalik:
     st.subheader("Aplikasi Pembalik Urutan")
     st.caption("Tempel daftar angka atau teks Anda di bawah untuk membalik urutannya dari bawah ke atas.")
-    col1_pembalik, col2_pembali = st.columns(2)
-    with col1_pembalik: st.text_area("Data Asli", height=350, key="data_asli_pembalik")
-    with col2_pembalik: st.text_area("Hasil Dibalik", value=st.session_state.hasil_dibalik_pembalik, height=350, disabled=True)
+    col1_pembalik, col2_pembalik = st.columns(2)
+    with col1_pembalik:
+        st.text_area("Data Asli", height=350, key="data_asli_pembalik")
+    with col2_pembalik:
+        st.text_area("Hasil Dibalik", value=st.session_state.hasil_dibalik_pembalik, height=350, disabled=True)
     btn_col1, btn_col2, btn_col3 = st.columns(3)
     with btn_col1:
         if st.button("Balikkan Urutan!", use_container_width=True, type="primary"):
