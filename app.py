@@ -7,7 +7,6 @@ import numpy as np
 from collections import defaultdict, Counter
 from itertools import product
 from datetime import datetime
-import re
 
 # ==============================================================================
 # BAGIAN 1: FUNGSI-FUNGSI INTI
@@ -22,15 +21,6 @@ JALUR_ANGKA_MAP = {
     1: "01*13*25*37*49*61*73*85*97*04*16*28*40*52*64*76*88*00*07*19*31*43*55*67*79*91*10*22*34*46*58*70*82*94",
     2: "02*14*26*38*50*62*74*86*98*05*17*29*41*53*65*77*89*08*20*32*44*56*68*80*92*11*23*35*47*59*71*83*95",
     3: "03*15*27*39*51*63*75*87*99*06*18*30*42*54*66*78*90*09*21*33*45*57*69*81*93*12*24*36*48*60*72*84*96"
-}
-
-SHIO_MAP = {
-    1: {1, 13, 25, 37, 49, 61, 73, 85, 97}, 2: {2, 14, 26, 38, 50, 62, 74, 86, 98},
-    3: {3, 15, 27, 39, 51, 63, 75, 87, 99}, 4: {4, 16, 28, 40, 52, 64, 76, 88, 0},
-    5: {5, 17, 29, 41, 53, 65, 77, 89},    6: {6, 18, 30, 42, 54, 66, 78, 90},
-    7: {7, 19, 31, 43, 55, 67, 79, 91},    8: {8, 20, 32, 44, 56, 68, 80, 92},
-    9: {9, 21, 33, 45, 57, 69, 81, 93},    10: {10, 22, 34, 46, 58, 70, 82, 94},
-    11: {11, 23, 35, 47, 59, 71, 83, 95},  12: {12, 24, 36, 48, 60, 72, 84, 96}
 }
 
 @st.cache_resource
@@ -204,64 +194,6 @@ def train_and_save_model(df, lokasi, window_dict, model_type):
         bar.progress(100, text=f"Model {label.upper()} berhasil disimpan!"); time.sleep(1); bar.empty()
 
 # ==============================================================================
-# BAGIAN 2: FUNGSI-FUNGSI BARU UNTUK REKAP 2D
-# ==============================================================================
-def parse_input_numbers(input_str):
-    if not isinstance(input_str, str) or not input_str: return set()
-    cleaned_str = re.sub(r'[^0-9,-]', ',', input_str)
-    numbers = set()
-    for part in cleaned_str.split(','):
-        part = part.strip()
-        if not part: continue
-        if '-' in part:
-            try:
-                start, end = map(int, part.split('-'))
-                numbers.update(range(start, end + 1))
-            except ValueError: continue
-        else:
-            try: numbers.add(int(part))
-            except ValueError: continue
-    return numbers
-
-def generate_rekap_grid(dead_numbers):
-    header = "<tr>" + "".join(f"<th style='text-align:center;background-color:#003366;color:white;'>{i}</th>" for i in range(10)) + "</tr>"
-    rows = ""
-    for i in range(10):
-        row = f"<tr><td style='text-align:center;background-color:#003366;color:white;'><b>{i}0</b></td>"
-        for j in range(10):
-            num, num_str = i * 10 + j, f"{i * 10 + j:02d}"
-            if num in dead_numbers:
-                row += f"<td style='text-align:center;background-color:#FFC0CB;color:red;text-decoration:line-through;'>{num_str}</td>"
-            else:
-                row += f"<td style='text-align:center;background-color:#E0F7FA;'>{num_str}</td>"
-        rows += row + "</tr>"
-    return f"<table style='width:100%; border-collapse: collapse;'>{header}{rows}</table>"
-
-def run_rekap_filter(state):
-    kepala_off, ekor_off = parse_input_numbers(state.get('rekap_kepala_off', '')), parse_input_numbers(state.get('rekap_ekor_off', ''))
-    jumlah_off, shio_off = parse_input_numbers(state.get('rekap_jumlah_off', '')), parse_input_numbers(state.get('rekap_shio_off', ''))
-    ln_off = parse_input_numbers(state.get('rekap_ln_off', ''))
-    for shio_num in shio_off:
-        if shio_num in SHIO_MAP: ln_off.update(SHIO_MAP[shio_num])
-    
-    live_numbers, dead_numbers = [], set()
-    for num in range(100):
-        kepala, ekor, jumlah = num // 10, num % 10, (num // 10 + num % 10) % 10
-        is_dead = False
-        if kepala in kepala_off or ekor in ekor_off or jumlah in jumlah_off or num in ln_off: is_dead = True
-        if state.rekap_k_besar_kecil == "Besar" and kepala < 5: is_dead = True
-        if state.rekap_k_besar_kecil == "Kecil" and kepala >= 5: is_dead = True
-        if state.rekap_k_ganjil_genap == "Ganjil" and kepala % 2 == 0: is_dead = True
-        if state.rekap_k_ganjil_genap == "Genap" and kepala % 2 != 0: is_dead = True
-        if state.rekap_e_besar_kecil == "Besar" and ekor < 5: is_dead = True
-        if state.rekap_e_besar_kecil == "Kecil" and ekor >= 5: is_dead = True
-        if state.rekap_e_ganjil_genap == "Ganjil" and ekor % 2 == 0: is_dead = True
-        if state.rekap_e_ganjil_genap == "Genap" and ekor % 2 != 0: is_dead = True
-        if is_dead: dead_numbers.add(num)
-        else: live_numbers.append(f"{num:02d}")
-    return live_numbers, dead_numbers
-
-# ==============================================================================
 # APLIKASI STREAMLIT UTAMA
 # ==============================================================================
 st.set_page_config(page_title="Prediksi 4D", layout="wide")
@@ -275,16 +207,6 @@ if 'scan_queue' not in st.session_state: st.session_state.scan_queue = []
 if 'current_scan_job' not in st.session_state: st.session_state.current_scan_job = None
 if 'data_asli_pembalik' not in st.session_state: st.session_state.data_asli_pembalik = ""
 if 'hasil_dibalik_pembalik' not in st.session_state: st.session_state.hasil_dibalik_pembalik = ""
-if 'active_rekap' not in st.session_state: st.session_state.active_rekap = None
-if 'rekap_results' not in st.session_state: st.session_state.rekap_results = {}
-
-rekap_inputs = {
-    'rekap_kepala_off': '', 'rekap_ekor_off': '', 'rekap_shio_off': '', 'rekap_jumlah_off': '', 'rekap_ln_off': '',
-    'rekap_k_besar_kecil': 'Semua', 'rekap_k_ganjil_genap': 'Semua', 
-    'rekap_e_besar_kecil': 'Semua', 'rekap_e_ganjil_genap': 'Semua'
-}
-for key, value in rekap_inputs.items():
-    if key not in st.session_state: st.session_state[key] = value
 
 st.title("Prediksi 4D")
 st.caption("editing by: Andi Prediction")
@@ -388,44 +310,14 @@ def display_scan_progress_and_results(df, model_type, min_ws, max_ws, jumlah_dig
                     if result_df is not None and not result_df.empty:
                         st.dataframe(result_df, use_container_width=True)
                         if data["ws"] is not None: st.info(f"💡 **WS terbaik yang ditemukan: {data['ws']}**")
-                        if "Angka Mati" in result_df.columns or "Shio Mati" in result_df.columns:
-                            if st.button(f"📊 Buka Rekap 2D untuk {label.replace('_', ' ').upper()}", key=f"rekap_btn_{label}", use_container_width=True):
-                                st.session_state.active_rekap = label
-                                for key in rekap_inputs: st.session_state[key] = rekap_inputs[key]
-                                best_row = result_df.iloc[-1]
-                                if "Angka Mati" in result_df.columns: st.session_state.rekap_ln_off = str(best_row.get("Angka Mati", ""))
-                                if "Shio Mati" in result_df.columns: st.session_state.rekap_shio_off = str(best_row.get("Shio Mati", ""))
-                                st.session_state.rekap_results = {}; st.rerun()
                     else: st.warning("Tidak ada hasil yang valid untuk rentang WS ini.")
         st.markdown("---")
-
-    if st.session_state.active_rekap:
-        active_label = st.session_state.active_rekap
-        with st.container(border=True):
-            st.subheader(f"📝 Rekap Angka 2D (berdasarkan hasil: {active_label.replace('_',' ').upper()})")
-            with st.form(key="rekap_form"):
-                c1,c2=st.columns(2); c1.text_input("Kepala Off",key='rekap_kepala_off'); c1.text_input("Shio Off",key='rekap_shio_off')
-                sc1,sc2=c1.columns(2); sc1.selectbox("Kepala",["Semua","Besar","Kecil"],key="rekap_k_besar_kecil"); sc2.selectbox("Kepala",["Semua","Ganjil","Genap"],key="rekap_k_ganjil_genap",label_visibility="hidden")
-                c2.text_input("Ekor Off",key='rekap_ekor_off'); c2.text_input("Jumlah Off (0-9)",key='rekap_jumlah_off')
-                sc3,sc4=c2.columns(2); sc3.selectbox("Ekor",["Semua","Besar","Kecil"],key="rekap_e_besar_kecil"); sc4.selectbox("Ekor",["Semua","Ganjil","Genap"],key="rekap_e_ganjil_genap",label_visibility="hidden")
-                st.text_area("LN OFF", key='rekap_ln_off')
-                s_col,r_col,c_col=st.columns(3); submitted=s_col.form_submit_button("✅ Generate",use_container_width=True,type="primary")
-                if r_col.form_submit_button("🔄 Reset",use_container_width=True):
-                    for key in rekap_inputs:st.session_state[key]=rekap_inputs[key]
-                    st.session_state.rekap_results={}; st.rerun()
-            if c_col.button("❌ Tutup Rekap",use_container_width=True): st.session_state.active_rekap,st.session_state.rekap_results=None,{}; st.rerun()
-            if submitted:
-                live,dead=run_rekap_filter(st.session_state); st.session_state.rekap_results={"live":live,"grid":generate_rekap_grid(dead)}; st.rerun()
-            if st.session_state.rekap_results:
-                st.markdown("##### LN Dasar"); st.markdown(st.session_state.rekap_results.get("grid",""),unsafe_allow_html=True); st.markdown("---")
-                live_nums=st.session_state.rekap_results.get("live",[]); st.markdown(f"##### LN TOP = {len(live_nums)} LN")
-                st.text_area("Angka Hidup",value="*".join(live_nums),height=200,label_visibility="collapsed")
 
 with tab_scan:
     st.subheader("Pencarian Window Size (WS) Optimal per Kategori")
     st.info("Tekan tombol di bawah untuk menambahkan scan ke antrian. Pantau progres dan lihat hasilnya di tab 'Scan Otomatis & Monitoring'.")
     if st.button("❌ Hapus Hasil Scan"):
-        st.session_state.scan_outputs, st.session_state.active_rekap = {}, None
+        st.session_state.scan_outputs.clear()
         st.rerun()
     st.divider()
     def create_scan_button(label, container):
