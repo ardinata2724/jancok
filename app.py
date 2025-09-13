@@ -279,7 +279,7 @@ with st.sidebar:
     selected_lokasi = st.selectbox("🌍 Pilih Pasaran", lokasi_list)
     putaran = st.number_input("🔁 Jumlah Putaran Terakhir", 10, 1000, 100)
     # --- PENAMBAHAN KOLOM 2D/3D/4D ---
-    mode_angka = st.radio("Mode", ("4D", "3D", "2D"), horizontal=True, key="mode_angka_selector")
+    mode_angka = st.radio("Mode", ("2D", "3D", "4D"), horizontal=True, key="mode_angka_selector")
     # --- END PENAMBAHAN ---
     st.markdown("---")
     st.markdown("### 🎯 Opsi Prediksi")
@@ -293,7 +293,7 @@ with st.sidebar:
     window_per_digit = {label: st.number_input(f"{label.upper()}", 1, 100, 7, key=f"win_{label}") for label in DIGIT_LABELS}
 
 # --- LOGIKA UNTUK MENENTUKAN JUMLAH DIGIT BERDASARKAN MODE ---
-digit_count = {"4D": 4, "3D": 3, "2D": 2}[mode_angka]
+digit_count = {"2D": 2, "3D": 3, "4D": 4}[mode_angka]
 
 def get_file_name_from_lokasi(lokasi):
     cleaned_lokasi = lokasi.lower().replace(" ", "")
