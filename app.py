@@ -7,6 +7,7 @@ import numpy as np
 from collections import defaultdict, Counter
 from itertools import product
 from datetime import datetime
+import re
 
 # ==============================================================================
 # BAGIAN 1: FUNGSI-FUNGSI INTI
@@ -22,6 +23,66 @@ JALUR_ANGKA_MAP = {
     2: "02*14*26*38*50*62*74*86*98*05*17*29*41*53*65*77*89*08*20*32*44*56*68*80*92*11*23*35*47*59*71*83*95",
     3: "03*15*27*39*51*63*75*87*99*06*18*30*42*54*66*78*90*09*21*33*45*57*69*81*93*12*24*36*48*60*72*84*96"
 }
+
+# --- FUNGSI DAN DATA BARU UNTUK REKAP 2D ---
+SHIO_MAP = {
+    1: {1, 13, 25, 37, 49, 61, 73, 85, 97}, 2: {2, 14, 26, 38, 50, 62, 74, 86, 98},
+    3: {3, 15, 27, 39, 51, 63, 75, 87, 99}, 4: {4, 16, 28, 40, 52, 64, 76, 88, 0},
+    5: {5, 17, 29, 41, 53, 65, 77, 89},    6: {6, 18, 30, 42, 54, 66, 78, 90},
+    7: {7, 19, 31, 43, 55, 67, 79, 91},    8: {8, 20, 32, 44, 56, 68, 80, 92},
+    9: {9, 21, 33, 45, 57, 69, 81, 93},    10: {10, 22, 34, 46, 58, 70, 82, 94},
+    11: {11, 23, 35, 47, 59, 71, 83, 95},  12: {12, 24, 36, 48, 60, 72, 84, 96}
+}
+
+def parse_input_numbers(input_str):
+    if not isinstance(input_str, str) or not input_str: return set()
+    cleaned_str = re.sub(r'[^0-9,-]', ',', input_str)
+    numbers = set()
+    for part in cleaned_str.split(','):
+        part = part.strip()
+        if not part: continue
+        if '-' in part:
+            try:
+                start, end = map(int, part.split('-'))
+                numbers.update(range(start, end + 1))
+            except ValueError: continue
+        else:
+            try: numbers.add(int(part))
+            except ValueError: continue
+    return numbers
+
+def generate_rekap_grid(dead_numbers):
+    cols = st.columns(10)
+    for i in range(100):
+        num_str = f"{i:02d}"
+        if i in dead_numbers:
+            cols[i%10].markdown(f"<div style='background-color:#E57373; color:white; text-align:center; padding:5px; border-radius:5px; margin:2px;'>{num_str}</div>", unsafe_allow_html=True)
+        else:
+            cols[i%10].markdown(f"<div style='background-color:#4CAF50; color:white; text-align:center; padding:5px; border-radius:5px; margin:2px;'>{num_str}</div>", unsafe_allow_html=True)
+
+def run_rekap_filter(state):
+    kepala_off = parse_input_numbers(state.get('rekap_kepala_off', ''))
+    ekor_off = parse_input_numbers(state.get('rekap_ekor_off', ''))
+    jumlah_off = parse_input_numbers(state.get('rekap_jumlah_off', ''))
+    shio_off = parse_input_numbers(state.get('rekap_shio_off', ''))
+    ln_off = parse_input_numbers(state.get('rekap_ln_off', ''))
+    
+    for shio_num in shio_off:
+        if shio_num in SHIO_MAP: ln_off.update(SHIO_MAP[shio_num])
+
+    live_numbers, dead_numbers = [], set()
+    for num in range(100):
+        kepala, ekor, jumlah = num // 10, num % 10, (num // 10 + num % 10) % 10
+        is_dead = False
+        if kepala in kepala_off: is_dead = True
+        if ekor in ekor_off: is_dead = True
+        if jumlah in jumlah_off: is_dead = True
+        if num in ln_off: is_dead = True
+        
+        if is_dead: dead_numbers.add(num)
+        else: live_numbers.append(f"{num:02d}")
+            
+    return live_numbers, dead_numbers
 
 @st.cache_resource
 def _get_positional_encoding_layer():
@@ -208,6 +269,14 @@ if 'current_scan_job' not in st.session_state: st.session_state.current_scan_job
 if 'data_asli_pembalik' not in st.session_state: st.session_state.data_asli_pembalik = ""
 if 'hasil_dibalik_pembalik' not in st.session_state: st.session_state.hasil_dibalik_pembalik = ""
 
+# --- Session State untuk Rekap 2D ---
+if 'rekap_results' not in st.session_state:
+    st.session_state.rekap_results = {"live": [f"{i:02d}" for i in range(100)], "dead": set()}
+rekap_inputs = ['rekap_kepala_off', 'rekap_ekor_off', 'rekap_shio_off', 'rekap_jumlah_off', 'rekap_ln_off']
+for key in rekap_inputs:
+    if key not in st.session_state:
+        st.session_state[key] = ""
+
 st.title("Prediksi 4D")
 st.caption("editing by: Andi Prediction")
 try: from lokasi_list import lokasi_list
@@ -274,7 +343,9 @@ with col2:
 active_list = st.session_state.angka_list if st.session_state.active_data == 'A' else st.session_state.angka_list_2
 df = pd.DataFrame({"angka": active_list})
 
-tab_scan, tab_auto_scan, tab_manajemen, tab_pembalik = st.tabs(["🪟 Scan Manual", "⚡ Scan Otomatis & Monitoring", "⚙️ Manajemen Model", "🔄 Pembalik Urutan"])
+# --- Definisi Tab Baru ---
+tab_scan, tab_auto_scan, tab_manajemen, tab_pembalik, tab_rekap_2d = st.tabs(["🪟 Scan Manual", "⚡ Scan Otomatis & Monitoring", "⚙️ Manajemen Model", "🔄 Pembalik Urutan", "🔢 Rekap Angka 2D"])
+
 
 def display_scan_progress_and_results(df, model_type, min_ws, max_ws, jumlah_digit, jumlah_digit_shio):
     if st.session_state.current_scan_job and len(df) < max_ws + 10:
@@ -327,20 +398,15 @@ with tab_scan:
     
     category_tabs = st.tabs(["Digit", "Jumlah", "BBFS", "Shio", "Jalur Main"])
     with category_tabs[0]:
-        cols = st.columns(len(DIGIT_LABELS))
-        for label, container in zip(DIGIT_LABELS, cols): create_scan_button(label, container)
+        cols = st.columns(len(DIGIT_LABELS)); [create_scan_button(label, c) for label, c in zip(DIGIT_LABELS, cols)]
     with category_tabs[1]:
-        cols = st.columns(len(JUMLAH_LABELS))
-        for label, container in zip(JUMLAH_LABELS, cols): create_scan_button(label, container)
+        cols = st.columns(len(JUMLAH_LABELS)); [create_scan_button(label, c) for label, c in zip(JUMLAH_LABELS, cols)]
     with category_tabs[2]:
-        cols = st.columns(len(BBFS_LABELS))
-        for label, container in zip(BBFS_LABELS, cols): create_scan_button(label, container)
+        cols = st.columns(len(BBFS_LABELS)); [create_scan_button(label, c) for label, c in zip(BBFS_LABELS, cols)]
     with category_tabs[3]:
-        cols = st.columns(len(SHIO_LABELS))
-        for label, container in zip(SHIO_LABELS, cols): create_scan_button(label, container)
+        cols = st.columns(len(SHIO_LABELS)); [create_scan_button(label, c) for label, c in zip(SHIO_LABELS, cols)]
     with category_tabs[4]:
-        cols = st.columns(len(JALUR_LABELS))
-        for label, container in zip(JALUR_LABELS, cols): create_scan_button(label, container)
+        cols = st.columns(len(JALUR_LABELS)); [create_scan_button(label, c) for label, c in zip(JALUR_LABELS, cols)]
 
 with tab_auto_scan:
     st.subheader(f"Otomatisasi & Monitoring Scan untuk Mode {mode_angka}")
@@ -395,3 +461,46 @@ with tab_pembalik:
         if st.button("Bersihkan", use_container_width=True):
             st.session_state.data_asli_pembalik, st.session_state.hasil_dibalik_pembalik = "", ""
             st.rerun()
+
+# --- KONTEN TAB REKAP 2D BARU ---
+with tab_rekap_2d:
+    st.subheader("Rekap Angka 2D")
+    st.caption("Alat bantu untuk menganalisa dan memfilter angka 2D.")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        with st.container(border=True):
+            st.text_input("Kepala Off", placeholder="misal: 123", key="rekap_kepala_off")
+            st.text_input("Ekor Off", placeholder="misal: 123", key="rekap_ekor_off")
+            st.text_input("Jumlah Off", placeholder="misal: 123", key="rekap_jumlah_off")
+            st.text_input("Shio Off", placeholder="misal: 11,12", key="rekap_shio_off")
+            st.text_area("LN OFF / jalur main off", placeholder="masukan LN off pisahkan dengan spasi, koma, atau *", key="rekap_ln_off")
+            
+            btn_col1, btn_col2 = st.columns(2)
+            if btn_col1.button("Generate", use_container_width=True, type="primary"):
+                live, dead = run_rekap_filter(st.session_state)
+                st.session_state.rekap_results = {"live": live, "dead": dead}
+                st.rerun()
+
+            if btn_col2.button("Reset", use_container_width=True):
+                for key in rekap_inputs:
+                    st.session_state[key] = ""
+                st.session_state.rekap_results = {"live": [f"{i:02d}" for i in range(100)], "dead": set()}
+                st.rerun()
+    
+    with col2:
+        with st.container(border=True):
+            st.markdown("<h5 style='text-align: center;'>Papan Angka</h5>", unsafe_allow_html=True)
+            generate_rekap_grid(st.session_state.rekap_results['dead'])
+
+    st.markdown("---")
+
+    with st.container(border=True):
+        live_numbers = st.session_state.rekap_results['live']
+        st.subheader(f"Hasil Rekap ({len(live_numbers)} LN)")
+        st.text_area(
+            "Hasil Rekap", 
+            value="*".join(live_numbers), 
+            height=200,
+            label_visibility="collapsed"
+            )
