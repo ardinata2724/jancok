@@ -11,23 +11,19 @@ import re
 import tensorflow as tf
 
 # ==============================================================================
-# BAGIAN 1: DEFINISI KELAS & KONSTANTA GLOBAL
+# BAGIAN 1: FUNGSI-FUNGSI & DEFINISI KELAS INTI
 # ==============================================================================
 
-class PositionalEncoding(tf.keras.layers.Layer):
-    def call(self, x):
-        seq_len, d_model = tf.shape(x)[1], tf.shape(x)[2]
-        pos = tf.cast(tf.range(seq_len)[:, tf.newaxis], dtype=tf.float32)
-        i = tf.cast(tf.range(d_model)[tf.newaxis, :], dtype=tf.float32)
-        angle_rates = 1 / tf.pow(10000.0, (2 * (i // 2)) / tf.cast(d_model, tf.float32))
-        angle_rads = pos * angle_rates
-        sines, cosines = tf.math.sin(angle_rads[:, 0::2]), tf.math.cos(angle_rads[:, 1::2])
-        pos_encoding = tf.concat([sines, cosines], axis=-1)
-        return x + tf.cast(tf.expand_dims(pos_encoding, 0), tf.float32)
-    
-    def get_config(self):
-        config = super().get_config()
-        return config
+# --- PERBAIKAN: Mengganti Class dengan Fungsi + Lambda Layer agar lebih stabil ---
+def positional_encoding_func(x):
+    seq_len, d_model = tf.shape(x)[1], tf.shape(x)[2]
+    pos = tf.cast(tf.range(seq_len)[:, tf.newaxis], dtype=tf.float32)
+    i = tf.cast(tf.range(d_model)[tf.newaxis, :], dtype=tf.float32)
+    angle_rates = 1 / tf.pow(10000.0, (2 * (i // 2)) / tf.cast(d_model, tf.float32))
+    angle_rads = pos * angle_rates
+    sines, cosines = tf.math.sin(angle_rads[:, 0::2]), tf.math.cos(angle_rads[:, 1::2])
+    pos_encoding = tf.concat([sines, cosines], axis=-1)
+    return x + tf.cast(tf.expand_dims(pos_encoding, 0), tf.float32)
 
 DIGIT_LABELS = ["ribuan", "ratusan", "puluhan", "satuan"]
 BBFS_LABELS = ["bbfs_ribuan-ratusan", "bbfs_ratusan-puluhan", "bbfs_puluhan-satuan"]
@@ -50,12 +46,6 @@ SHIO_MAP = {
     11: {11, 23, 35, 47, 59, 71, 83, 95},  12: {12, 24, 36, 48, 60, 72, 84, 96}
 }
 
-# ==============================================================================
-# BAGIAN 2: FUNGSI-FUNGSI UTAMA
-# ==============================================================================
-
-# ... (Kode fungsi dari `parse_input_numbers` hingga `train_and_save_model` diletakkan di sini,
-# saya akan meringkasnya agar tidak terlalu panjang, tetapi di file asli semuanya lengkap)
 def parse_input_numbers(input_str):
     if not isinstance(input_str, str) or not input_str: return set()
     cleaned_str = re.sub(r'[^0-9,-]', ',', input_str)
@@ -101,7 +91,8 @@ def load_cached_model(model_path):
     from tensorflow.keras.models import load_model
     if os.path.exists(model_path):
         try:
-            return load_model(model_path, custom_objects={"PositionalEncoding": PositionalEncoding})
+            # --- PERBAIKAN: custom_objects tidak lagi diperlukan untuk PositionalEncoding ---
+            return load_model(model_path)
         except Exception as e:
             st.error(f"Gagal memuat model di {model_path}: {e}")
     return None
@@ -153,8 +144,13 @@ def tf_preprocess_data_for_jalur(df, window_size, target_position):
 
 def build_tf_model(input_len, model_type, problem_type, num_classes):
     from tensorflow.keras.models import Model
-    from tensorflow.keras.layers import Input, Embedding, Bidirectional, LSTM, Dropout, Dense, LayerNormalization, MultiHeadAttention, GlobalAveragePooling1D
-    inputs = Input(shape=(input_len,)); x = Embedding(10, 64)(inputs); x = PositionalEncoding()(x)
+    from tensorflow.keras.layers import Input, Embedding, Bidirectional, LSTM, Dropout, Dense, LayerNormalization, MultiHeadAttention, GlobalAveragePooling1D, Lambda
+    
+    inputs = Input(shape=(input_len,))
+    x = Embedding(10, 64)(inputs)
+    # --- PERBAIKAN: Menggunakan Lambda Layer yang lebih stabil ---
+    x = Lambda(positional_encoding_func, name='positional_encoding')(x)
+    
     if model_type == "transformer":
         attn = MultiHeadAttention(num_heads=4, key_dim=64)(x, x); x = LayerNormalization()(x + attn)
     else:
@@ -163,6 +159,9 @@ def build_tf_model(input_len, model_type, problem_type, num_classes):
     outputs, loss = (Dense(num_classes, activation='sigmoid')(x), "binary_crossentropy") if problem_type == "multilabel" else (Dense(num_classes, activation='softmax')(x), "categorical_crossentropy")
     model = Model(inputs, outputs)
     return model, loss
+
+# ... (Sisa kode dari `top_n_model` hingga akhir sama persis dengan file sebelumnya,
+# saya akan meringkasnya agar tidak terlalu panjang, tetapi di file asli semuanya lengkap)
 
 def top_n_model(df, lokasi, window_dict, model_type, top_n, labels_to_predict):
     results = []
@@ -281,6 +280,7 @@ def train_and_save_model(df, lokasi, window_dict, model_type, labels_to_train):
         model.save(model_path)
         bar.progress(100, text=f"Model {label.upper()} berhasil disimpan!"); time.sleep(1); bar.empty()
 
+# ... (Sisa kode dari sini ke bawah tidak berubah) ...
 # ==============================================================================
 # APLIKASI STREAMLIT UTAMA
 # ==============================================================================
@@ -544,7 +544,6 @@ with tab_prediksi:
         if len(df) < min_required_data:
             st.error(f"Data tidak cukup untuk menjalankan prediksi. Model memerlukan setidaknya {min_required_data} baris data berdasarkan WS di sidebar.")
         else:
-            # --- PERUBAHAN: Membuat daftar label dinamis berdasarkan mode ---
             labels_to_predict = []
             if mode_angka == '4D': labels_to_predict = DIGIT_LABELS
             elif mode_angka == '3D': labels_to_predict = DIGIT_LABELS[1:]
@@ -558,7 +557,6 @@ with tab_prediksi:
                 st.success("Prediksi berhasil dibuat!")
                 st.subheader(f"🎯 Hasil Prediksi Top {jumlah_digit}")
                 
-                # --- PERUBAHAN: Membuat kolom dan metrik dinamis ---
                 if labels_to_predict:
                     cols = st.columns(len(labels_to_predict))
                     for i, label in enumerate(labels_to_predict):
