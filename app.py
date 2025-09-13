@@ -352,15 +352,14 @@ with col2:
 active_list = st.session_state.angka_list if st.session_state.active_data == 'A' else st.session_state.angka_list_2
 df = pd.DataFrame({"angka": active_list})
 
-tab_scan, tab_auto_scan, tab_manajemen, tab_pembalik = st.tabs(["🪟 Scan Manual", "⚡ Scan Otomatis", "⚙️ Manajemen Model", "🔄 Pembalik Urutan"])
+tab_scan, tab_auto_scan, tab_manajemen, tab_pembalik = st.tabs(["🪟 Scan Manual", "⚡ Scan Otomatis & Monitoring", "⚙️ Manajemen Model", "🔄 Pembalik Urutan"])
 
 def display_scan_progress_and_results(df, model_type, min_ws, max_ws, jumlah_digit, jumlah_digit_shio):
-    # --- PERBAIKAN: Pesan error yang lebih jelas dan tidak hilang ---
     if st.session_state.current_scan_job and len(df) < max_ws + 10:
         st.error(f"SCAN DIBATALKAN: Data Anda hanya {len(df)} baris. Diperlukan lebih dari {max_ws + 10} baris untuk Max WS={max_ws}.")
         st.info("Solusi: Tambah data melalui 'Ambil Data' atau kurangi nilai 'Max WS' di sidebar.")
         st.session_state.current_scan_job = None
-        return # Hentikan eksekusi fungsi lebih lanjut
+        return 
 
     if st.session_state.scan_queue:
         queue_display = " ➡️ ".join([f"**{job.replace('_', ' ').upper()}**" for job in st.session_state.scan_queue])
@@ -423,8 +422,8 @@ def display_scan_progress_and_results(df, model_type, min_ws, max_ws, jumlah_dig
                 st.text_area("Angka Hidup",value="*".join(live_nums),height=200,label_visibility="collapsed")
 
 with tab_scan:
-    st.subheader("Pencarian Window Size (WS) Optimal per Kategori (Manual)")
-    st.info("Atur rentang Min dan Max WS di sidebar. Pastikan jumlah data lebih besar dari Max WS + 10.")
+    st.subheader("Pencarian Window Size (WS) Optimal per Kategori")
+    st.info("Tekan tombol di bawah untuk menambahkan scan ke antrian. Pantau progres dan lihat hasilnya di tab 'Scan Otomatis & Monitoring'.")
     if st.button("❌ Hapus Hasil Scan"):
         st.session_state.scan_outputs, st.session_state.active_rekap = {}, None
         st.rerun()
@@ -450,12 +449,10 @@ with tab_scan:
     with category_tabs[4]:
         cols = st.columns(len(JALUR_LABELS))
         for label, container in zip(JALUR_LABELS, cols): create_scan_button(label, container)
-    st.divider()
-    display_scan_progress_and_results(df, model_type, min_ws, max_ws, jumlah_digit, jumlah_digit_shio)
 
 with tab_auto_scan:
-    st.subheader(f"Otomatisasi Scan Window Size untuk Mode {mode_angka}")
-    st.info("Fitur ini akan menjalankan serangkaian proses scan WS yang relevan untuk mode yang Anda pilih di sidebar. Pastikan jumlah data mencukupi.")
+    st.subheader(f"Otomatisasi & Monitoring Scan untuk Mode {mode_angka}")
+    st.info("Jalankan scan otomatis atau pantau progres scan yang sedang berjalan (baik dari manual maupun otomatis) di sini.")
     is_scanning = bool(st.session_state.scan_queue or st.session_state.current_scan_job)
     if st.button(f"🚀 Jalankan Scan Otomatis {mode_angka}", use_container_width=True, type="primary", disabled=is_scanning):
         scan_jobs = []
@@ -466,6 +463,7 @@ with tab_auto_scan:
             st.session_state.scan_queue.extend(scan_jobs)
             st.toast(f"✅ Auto-scan untuk mode {mode_angka} ditambahkan ke antrian!")
             st.rerun()
+    st.divider()
     display_scan_progress_and_results(df, model_type, min_ws, max_ws, jumlah_digit, jumlah_digit_shio)
 
 with tab_manajemen:
