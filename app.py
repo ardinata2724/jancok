@@ -522,15 +522,27 @@ with tab_scan:
     with category_tabs[4]: cols = st.columns(len(JALUR_LABELS)); [create_scan_button(label, cols[i]) for i, label in enumerate(JALUR_LABELS)]
     st.divider()
 
-if st.session_state.scan_queue: st.info(f"Antrian Berikutnya: {' ➡️ '.join([f'**{job.replace('_', ' ').upper()}**' for job in st.session_state.scan_queue])}")
-if not st.session_state.current_scan_job and st.session_state.scan_queue: st.session_state.current_scan_job = st.session_state.scan_queue.pop(0); st.rerun()
+# --- PERBAIKAN SYNTAX ERROR DI BLOK INI ---
+if st.session_state.scan_queue:
+    queue_display = " ➡️ ".join([f"**{job.replace('_', ' ').upper()}**" for job in st.session_state.scan_queue])
+    st.info(f"Antrian Berikutnya: {queue_display}")
+
+if not st.session_state.current_scan_job and st.session_state.scan_queue:
+    st.session_state.current_scan_job = st.session_state.scan_queue.pop(0)
+    st.rerun()
+    
 if st.session_state.current_scan_job:
     label = st.session_state.current_scan_job
-    if len(df) < max_ws + 10: st.error(f"Data tidak cukup untuk scan {label.upper()}. Tugas dibatalkan."); st.session_state.current_scan_job = None; time.sleep(2); st.rerun()
+    if len(df) < max_ws + 10:
+        st.error(f"Data tidak cukup untuk scan {label.upper()}. Tugas dibatalkan.")
+        st.session_state.current_scan_job = None
+        time.sleep(2)
+        st.rerun()
     else:
         st.warning(f"⏳ Sedang menjalankan scan untuk **{label.replace('_', ' ').upper()}**...")
         best_ws, result_table = find_best_window_size(df, label, model_type, min_ws, max_ws, jumlah_digit, jumlah_digit_shio)
-        st.session_state.scan_outputs[label], st.session_state.current_scan_job = {"ws": best_ws, "table": result_table}, None
+        st.session_state.scan_outputs[label] = {"ws": best_ws, "table": result_table}
+        st.session_state.current_scan_job = None
         st.rerun()
 
 # --- BAGIAN TAMPILAN HASIL SCAN & REKAP 2D BARU (PERBAIKAN) ---
