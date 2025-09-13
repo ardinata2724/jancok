@@ -304,7 +304,6 @@ with st.sidebar:
     model_type = "transformer" if use_transformer else "lstm"
     st.markdown("---")
     st.markdown("### 🪟 Pengaturan Window Size (WS)")
-    # --- PERUBAHAN: Pengaturan Min/Max WS dipindah ke sidebar ---
     min_ws = st.number_input("Min WS", 1, 99, 5)
     max_ws = st.number_input("Max WS", 1, 100, 31)
     st.markdown("---")
@@ -356,6 +355,13 @@ df = pd.DataFrame({"angka": active_list})
 tab_scan, tab_auto_scan, tab_manajemen, tab_pembalik = st.tabs(["🪟 Scan Manual", "⚡ Scan Otomatis", "⚙️ Manajemen Model", "🔄 Pembalik Urutan"])
 
 def display_scan_progress_and_results(df, model_type, min_ws, max_ws, jumlah_digit, jumlah_digit_shio):
+    # --- PERBAIKAN: Pesan error yang lebih jelas dan tidak hilang ---
+    if st.session_state.current_scan_job and len(df) < max_ws + 10:
+        st.error(f"SCAN DIBATALKAN: Data Anda hanya {len(df)} baris. Diperlukan lebih dari {max_ws + 10} baris untuk Max WS={max_ws}.")
+        st.info("Solusi: Tambah data melalui 'Ambil Data' atau kurangi nilai 'Max WS' di sidebar.")
+        st.session_state.current_scan_job = None
+        return # Hentikan eksekusi fungsi lebih lanjut
+
     if st.session_state.scan_queue:
         queue_display = " ➡️ ".join([f"**{job.replace('_', ' ').upper()}**" for job in st.session_state.scan_queue])
         st.info(f"Antrian Berikutnya: {queue_display}")
@@ -366,15 +372,11 @@ def display_scan_progress_and_results(df, model_type, min_ws, max_ws, jumlah_dig
         
     if st.session_state.current_scan_job:
         label = st.session_state.current_scan_job
-        if len(df) < max_ws + 10:
-            st.error(f"Data tidak cukup untuk scan (diperlukan > {max_ws + 10} baris). Tugas dibatalkan.")
-            st.session_state.current_scan_job = None; time.sleep(3); st.rerun()
-        else:
-            st.warning(f"⏳ Sedang menjalankan scan untuk **{label.replace('_', ' ').upper()}**...")
-            best_ws, result_table = find_best_window_size(df, label, model_type, min_ws, max_ws, jumlah_digit, jumlah_digit_shio)
-            st.session_state.scan_outputs[label] = {"ws": best_ws, "table": result_table}
-            st.session_state.current_scan_job = None
-            st.rerun()
+        st.warning(f"⏳ Sedang menjalankan scan untuk **{label.replace('_', ' ').upper()}**...")
+        best_ws, result_table = find_best_window_size(df, label, model_type, min_ws, max_ws, jumlah_digit, jumlah_digit_shio)
+        st.session_state.scan_outputs[label] = {"ws": best_ws, "table": result_table}
+        st.session_state.current_scan_job = None
+        st.rerun()
 
     if st.session_state.scan_outputs:
         st.markdown("---"); st.subheader("✅ Hasil Scan Selesai")
@@ -457,7 +459,7 @@ with tab_auto_scan:
     is_scanning = bool(st.session_state.scan_queue or st.session_state.current_scan_job)
     if st.button(f"🚀 Jalankan Scan Otomatis {mode_angka}", use_container_width=True, type="primary", disabled=is_scanning):
         scan_jobs = []
-        if mode_angka == '2D': scan_jobs = ['puluhan', 'satuan', 'jumlah_belakang', 'bbfs_puluhan_satuan', 'shio_belakang', 'jalur_puluhan-satuan']
+        if mode_angka == '2D': scan_jobs = ['puluhan', 'satuan', 'jumlah_belakang', 'bbfs_puluhan-satuan', 'shio_belakang', 'jalur_puluhan-satuan']
         elif mode_angka == '3D': scan_jobs = ['ratusan', 'puluhan', 'satuan', 'jumlah_tengah', 'jumlah_belakang', 'bbfs_ratusan-puluhan', 'bbfs_puluhan-satuan', 'shio_tengah', 'shio_belakang', 'jalur_ratusan-puluhan', 'jalur_puluhan-satuan']
         elif mode_angka == '4D': scan_jobs = DIGIT_LABELS + JUMLAH_LABELS + BBFS_LABELS + SHIO_LABELS + JALUR_LABELS
         if scan_jobs:
