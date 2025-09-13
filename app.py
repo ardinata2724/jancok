@@ -350,7 +350,6 @@ with col2:
 active_list = st.session_state.angka_list if st.session_state.active_data == 'A' else st.session_state.angka_list_2
 df = pd.DataFrame({"angka": active_list})
 
-# --- PENGHAPUSAN TAB ---
 tab_scan, tab_auto_scan, tab_manajemen, tab_pembalik = st.tabs(["🪟 Scan Manual", "⚡ Scan Otomatis", "⚙️ Manajemen Model", "🔄 Pembalik Urutan"])
 
 def display_scan_progress_and_results(df, model_type, min_ws, max_ws, jumlah_digit, jumlah_digit_shio):
@@ -447,12 +446,28 @@ with tab_scan:
         is_pending = label in st.session_state.scan_queue or st.session_state.current_scan_job == label
         if container.button(f"🔎 Scan {label.replace('_', ' ').upper()}", key=f"scan_{label}", use_container_width=True, disabled=is_pending):
             st.session_state.scan_queue.append(label); st.toast(f"✅ Scan untuk '{label.upper()}' ditambahkan ke antrian."); st.rerun()
+    
     category_tabs = st.tabs(["Digit", "Jumlah", "BBFS", "Shio", "Jalur Main"])
-    with category_tabs[0]: cols=st.columns(len(DIGIT_LABELS)); [create_scan_button(label, c) for label, c in zip(DIGIT_LABELS, cols)]
-    with category_tabs[1]: cols=st.columns(len(JUMLAH_LABELS)); [create_scan_button(label, c) for label, c in zip(JUMLAH_LABELS, cols)]
-    with category_tabs[2]: cols=st.columns(len(BBFS_LABELS)); [create_scan_button(label, c) for label, c in zip(BBFS_LABELS, cols)]
-    with category_tabs[3]: cols=st.columns(len(SHIO_LABELS)); [create_scan_button(label, c) for label, c in zip(SHIO_LABELS, cols)]
-    with category_tabs[4]: cols=st.columns(len(JALUR_LABELS)); [create_scan_button(label, c) for label, c in zip(JALUR_LABELS, cols)]
+    with category_tabs[0]:
+        cols = st.columns(len(DIGIT_LABELS))
+        for label, container in zip(DIGIT_LABELS, cols):
+            create_scan_button(label, container)
+    with category_tabs[1]:
+        cols = st.columns(len(JUMLAH_LABELS))
+        for label, container in zip(JUMLAH_LABELS, cols):
+            create_scan_button(label, container)
+    with category_tabs[2]:
+        cols = st.columns(len(BBFS_LABELS))
+        for label, container in zip(BBFS_LABELS, cols):
+            create_scan_button(label, container)
+    with category_tabs[3]:
+        cols = st.columns(len(SHIO_LABELS))
+        for label, container in zip(SHIO_LABELS, cols):
+            create_scan_button(label, container)
+    with category_tabs[4]:
+        cols = st.columns(len(JALUR_LABELS))
+        for label, container in zip(JALUR_LABELS, cols):
+            create_scan_button(label, container)
     st.divider()
     display_scan_progress_and_results(df, model_type, min_ws, max_ws, jumlah_digit, jumlah_digit_shio)
 
