@@ -78,16 +78,6 @@ def run_rekap_filter(state):
     return live_numbers, dead_numbers
 
 # --- Fungsi Terkait AI & Model ---
-@st.cache_resource
-def load_cached_model(model_path):
-    from tensorflow.keras.models import load_model
-    if os.path.exists(model_path):
-        try:
-            return load_model(model_path)
-        except Exception as e:
-            st.error(f"Gagal memuat model di {model_path}: {e}")
-    return None
-
 def tf_preprocess_data(df, window_size=7):
     from tensorflow.keras.utils import to_categorical
     if len(df) < window_size + 1: return np.array([]), {}
@@ -151,38 +141,6 @@ def build_tf_model(input_len, model_type, problem_type, num_classes):
     model = Model(inputs, outputs)
     return model, loss
 
-def top_n_model(df, lokasi, window_dict, model_type, top_n, labels_to_predict):
-    results = []
-    loc_id = lokasi.lower().strip().replace(" ", "_")
-    all_models_exist = True
-    for label in labels_to_predict:
-        model_path = f"saved_models/{loc_id}_{label}_{model_type}.h5"
-        if not os.path.exists(model_path):
-            st.error(f"Model untuk {label.upper()} tidak ditemukan. Silakan latih model terlebih dahulu di tab 'Manajemen Model'.")
-            all_models_exist = False
-    if not all_models_exist: return None, "Model tidak lengkap."
-
-    with st.spinner("Memuat model dan menjalankan prediksi..."):
-        for label in labels_to_predict:
-            ws = window_dict.get(label, 7)
-            if len(df) < ws:
-                st.error(f"Data tidak cukup untuk prediksi {label.upper()} (diperlukan {ws} baris, tersedia {len(df)}).")
-                return None, "Data tidak cukup."
-            X, _ = tf_preprocess_data(df, ws)
-            if X.shape[0] == 0:
-                st.error(f"Gagal memproses data untuk prediksi {label.upper()} dengan WS={ws}.")
-                return None, "Gagal memproses data."
-            
-            model_path = f"saved_models/{loc_id}_{label}_{model_type}.h5"
-            model = load_cached_model(model_path)
-            
-            if model is None: return None, "Model gagal dimuat."
-            
-            pred = model.predict(X[-1:], verbose=0)
-            top_digits = list(np.argsort(pred[0])[-top_n:][::-1])
-            results.append(top_digits)
-    return results, None
-
 def find_best_window_size(df, label, model_type, min_ws, max_ws, top_n, top_n_shio):
     from sklearn.model_selection import train_test_split
     from tensorflow.keras.callbacks import EarlyStopping
@@ -245,27 +203,6 @@ def find_best_window_size(df, label, model_type, min_ws, max_ws, top_n, top_n_sh
     bar.empty()
     return best_ws, pd.DataFrame(table_data, columns=cols) if table_data else pd.DataFrame()
 
-def train_and_save_model(df, lokasi, window_dict, model_type, labels_to_train):
-    from sklearn.model_selection import train_test_split
-    from tensorflow.keras.callbacks import EarlyStopping
-    st.info(f"Memulai pelatihan untuk {lokasi}...")
-    lokasi_id = lokasi.lower().strip().replace(" ", "_")
-    if not os.path.exists("saved_models"): os.makedirs("saved_models")
-    for label in labels_to_train:
-        ws = window_dict.get(label, 7)
-        bar = st.progress(0, text=f"Memproses {label.upper()} (WS={ws})..."); X, y_dict = tf_preprocess_data(df, ws)
-        if label not in y_dict or y_dict[label].shape[0] < 10:
-            st.warning(f"Data tidak cukup untuk melatih '{label.upper()}'."); bar.empty(); continue
-        X_train, X_val, y_train, y_val = train_test_split(X, y_dict[label], test_size=0.2, random_state=42)
-        bar.progress(50, text=f"Melatih {label.upper()}...")
-        model, loss = build_tf_model(X.shape[1], model_type, 'multiclass', 10)
-        model.compile(optimizer='adam', loss=loss, metrics=['accuracy'])
-        model.fit(X_train, y_train, epochs=30, batch_size=32, validation_data=(X_val, y_val), callbacks=[EarlyStopping(monitor='val_loss', patience=5)], verbose=0)
-        model_path = f"saved_models/{lokasi_id}_{label}_{model_type}.h5"
-        bar.progress(75, text=f"Menyimpan {label.upper()}...")
-        model.save(model_path)
-        bar.progress(100, text=f"Model {label.upper()} berhasil disimpan!"); time.sleep(1); bar.empty()
-
 # ==============================================================================
 # APLIKASI STREAMLIT UTAMA
 # ==============================================================================
@@ -296,7 +233,7 @@ with st.sidebar:
     putaran = st.number_input("🔁 Jumlah Putaran Terakhir", 10, 1000, 100)
     mode_angka = st.radio("Mode", ("2D", "3D", "4D"), horizontal=True, key="mode_angka_selector")
     st.markdown("---")
-    st.markdown("### 🎯 Opsi Prediksi & Scan")
+    st.markdown("### 🎯 Opsi Scan")
     jumlah_digit = st.slider("🔢 Jumlah Digit Prediksi", 1, 9, 9)
     jumlah_digit_shio = st.slider("🐉 Jumlah Digit Prediksi Khusus Shio", 1, 12, 11)
     use_transformer = st.checkbox("🤖 Gunakan Transformer", value=True)
@@ -305,9 +242,6 @@ with st.sidebar:
     st.markdown("### 🪟 Pengaturan Window Size (WS)")
     min_ws = st.number_input("Min WS", 1, 99, 5)
     max_ws = st.number_input("Max WS", 1, 100, 31)
-    st.markdown("---")
-    st.markdown("### 🪟 WS per Digit (Training)")
-    window_per_digit = {label: st.number_input(f"{label.upper()}", 1, 100, 7, key=f"win_{label}") for label in DIGIT_LABELS}
 
 def get_file_name_from_lokasi(lokasi):
     cleaned_lokasi = lokasi.lower().replace(" ", "")
@@ -332,7 +266,7 @@ if st.button("Ambil Data dari Keluaran Angka", use_container_width=True):
             st.rerun()
     except FileNotFoundError: st.error(f"File tidak ditemukan: '{file_path}'.")
 
-st.radio("Pilih Set Data Aktif (untuk prediksi, analisis, & training):", ('A', 'B'), key='active_data', horizontal=True)
+st.radio("Pilih Set Data Aktif:", ('A', 'B'), key='active_data', horizontal=True)
 
 col1, col2 = st.columns(2)
 with col1:
@@ -351,7 +285,7 @@ with col2:
 active_list = st.session_state.angka_list if st.session_state.active_data == 'A' else st.session_state.angka_list_2
 df = pd.DataFrame({"angka": active_list})
 
-tab_scan, tab_auto_scan, tab_manajemen, tab_pembalik, tab_rekap_2d, tab_prediksi = st.tabs(["🪟 Scan Manual", "⚡ Scan Otomatis & Monitoring", "⚙️ Manajemen Model", "🔄 Pembalik Urutan", "🔢 Rekap Angka 2D", "🔮 Prediksi & Hasil"])
+tab_scan, tab_auto_scan, tab_pembalik, tab_rekap_2d = st.tabs(["🪟 Scan Manual", "⚡ Scan Otomatis & Monitoring", "🔄 Pembalik Urutan", "🔢 Rekap Angka 2D"])
 
 def display_scan_progress_and_results(df, model_type, min_ws, max_ws, jumlah_digit, jumlah_digit_shio):
     if st.session_state.current_scan_job and len(df) < max_ws + 10:
@@ -435,35 +369,6 @@ with tab_auto_scan:
     st.divider()
     display_scan_progress_and_results(df, model_type, min_ws, max_ws, jumlah_digit, jumlah_digit_shio)
 
-with tab_manajemen:
-    st.subheader("Manajemen Model AI")
-    lokasi_id = selected_lokasi.lower().strip().replace(" ", "_")
-    labels_to_show = []
-    if mode_angka == '4D': labels_to_show = DIGIT_LABELS
-    elif mode_angka == '3D': labels_to_show = DIGIT_LABELS[1:]
-    elif mode_angka == '2D': labels_to_show = DIGIT_LABELS[2:]
-
-    if labels_to_show:
-        cols = st.columns(len(labels_to_show))
-        for i, label in enumerate(labels_to_show):
-            with cols[i]:
-                model_path = f"saved_models/{lokasi_id}_{label}_{model_type}.h5"
-                st.markdown(f"##### {label.upper()}")
-                if os.path.exists(model_path):
-                    st.success("✅ Tersedia")
-                    if st.button("Hapus", key=f"hapus_{label}", use_container_width=True):
-                        os.remove(model_path)
-                        st.rerun()
-                else:
-                    st.warning("⚠️ Belum ada")
-
-    if st.button("📚 Latih & Simpan Semua Model AI", use_container_width=True, type="primary"):
-        if len(df) >= max(window_per_digit.values()) + 10:
-            train_and_save_model(df, selected_lokasi, window_per_digit, model_type, labels_to_show)
-            st.success("✅ Semua model berhasil dilatih!"); st.rerun()
-        else:
-            st.error("Data tidak cukup untuk melatih.")
-
 with tab_pembalik:
     st.subheader("Aplikasi Pembalik Urutan")
     st.caption("Tempel daftar angka atau teks Anda di bawah untuk membalik urutannya dari bawah ke atas.")
@@ -519,40 +424,3 @@ with tab_rekap_2d:
         height=200,
         label_visibility="collapsed"
     )
-
-with tab_prediksi:
-    st.subheader("Prediksi Menggunakan Model AI Tersimpan")
-    st.info("Fitur ini akan menggunakan model AI yang telah Anda latih dan simpan di tab 'Manajemen Model' untuk menghasilkan prediksi, sesuai dengan Mode yang aktif.")
-
-    if st.button("🚀 Jalankan Prediksi", use_container_width=True, type="primary"):
-        min_required_data = max(window_per_digit.values()) if window_per_digit else 7
-        if len(df) < min_required_data:
-            st.error(f"Data tidak cukup untuk menjalankan prediksi. Model memerlukan setidaknya {min_required_data} baris data berdasarkan WS di sidebar.")
-        else:
-            labels_to_predict = []
-            if mode_angka == '4D': labels_to_predict = DIGIT_LABELS
-            elif mode_angka == '3D': labels_to_predict = DIGIT_LABELS[1:]
-            elif mode_angka == '2D': labels_to_predict = DIGIT_LABELS[2:]
-
-            result, error_msg = top_n_model(df, selected_lokasi, window_per_digit, model_type, jumlah_digit, labels_to_predict)
-            
-            if error_msg:
-                pass 
-            elif result:
-                st.success("Prediksi berhasil dibuat!")
-                st.subheader(f"🎯 Hasil Prediksi Top {jumlah_digit}")
-                
-                if labels_to_predict:
-                    cols = st.columns(len(labels_to_predict))
-                    for i, label in enumerate(labels_to_predict):
-                        with cols[i]:
-                            st.metric(label.capitalize(), ", ".join(map(str, result[i])))
-                
-                st.divider()
-
-                all_combinations = list(product(*result))
-                mode_digit_count = {"2D": 2, "3D": 3, "4D": 4}[mode_angka]
-                st.subheader(f"🔢 Semua Kombinasi {mode_angka} ({len(all_combinations)} Line)")
-                
-                combinations_str = " ".join(["".join(map(str, combo))[-mode_digit_count:] for combo in all_combinations])
-                st.text_area("Kombinasi Penuh", combinations_str, height=300)
