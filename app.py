@@ -181,7 +181,15 @@ def find_best_window_size(df, label, model_type, min_ws, max_ws, top_n, top_n_sh
             evals = model.evaluate(X_val, y_val, verbose=0); preds = model.predict(X_val, verbose=0)
             
             if is_jalur_scan:
-                top_indices = np.argsort(preds[-1])[::-1][:2]
+                # --- PERBAIKAN BUG DIMULAI ---
+                # Bug: Sebelumnya prediksi diambil dari satu data acak di set validasi (preds[-1]).
+                # Perbaikan: Melakukan prediksi pada data paling akhir dari keseluruhan set (X[-1])
+                # untuk mendapatkan ramalan 'langkah berikutnya' yang lebih relevan.
+                last_sequence = np.array([X[-1]])
+                prediction_for_next = model.predict(last_sequence, verbose=0)[0]
+                top_indices = np.argsort(prediction_for_next)[::-1][:2]
+                # --- PERBAIKAN BUG SELESAI ---
+
                 pred_str = f"{top_indices[0] + 1}-{top_indices[1] + 1}"
                 angka_jalur_str = f"Jalur {top_indices[0] + 1} => {JALUR_ANGKA_MAP[top_indices[0] + 1]}\n\nJalur {top_indices[1] + 1} => {JALUR_ANGKA_MAP[top_indices[1] + 1]}"
                 all_jalur = {1, 2, 3}; predicted_jalur = {top_indices[0] + 1, top_indices[1] + 1}
@@ -312,7 +320,6 @@ def display_scan_progress_and_results(df, model_type, min_ws, max_ws, jumlah_dig
 
     if st.session_state.scan_outputs:
         st.markdown("---")
-        # --- PERUBAHAN: Mengembalikan header ke bentuk semula ---
         st.subheader("✅ Hasil Scan Selesai")
                 
         display_order = DIGIT_LABELS + JUMLAH_LABELS + BBFS_LABELS + SHIO_LABELS + JALUR_LABELS
@@ -368,15 +375,11 @@ with tab_auto_scan:
             st.rerun()
     st.divider()
 
-    # --- PERUBAHAN DIMULAI ---
-    # Tombol hapus dipindahkan ke sini, sesuai permintaan pada gambar.
-    # Tombol hanya akan muncul jika ada hasil scan yang bisa dihapus.
     if st.session_state.scan_outputs:
         if st.button("❌ Hapus Hasil Scan", use_container_width=True):
             st.session_state.scan_outputs.clear()
             st.toast("🗑️ Semua hasil scan telah dihapus.")
             st.rerun()
-    # --- PERUBAHAN SELESAI ---
 
     display_scan_progress_and_results(df, model_type, min_ws, max_ws, jumlah_digit, jumlah_digit_shio)
 
