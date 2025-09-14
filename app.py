@@ -181,15 +181,9 @@ def find_best_window_size(df, label, model_type, min_ws, max_ws, top_n, top_n_sh
             evals = model.evaluate(X_val, y_val, verbose=0); preds = model.predict(X_val, verbose=0)
             
             if is_jalur_scan:
-                # --- PERBAIKAN BUG DIMULAI ---
-                # Bug: Sebelumnya prediksi diambil dari satu data acak di set validasi (preds[-1]).
-                # Perbaikan: Melakukan prediksi pada data paling akhir dari keseluruhan set (X[-1])
-                # untuk mendapatkan ramalan 'langkah berikutnya' yang lebih relevan.
                 last_sequence = np.array([X[-1]])
                 prediction_for_next = model.predict(last_sequence, verbose=0)[0]
                 top_indices = np.argsort(prediction_for_next)[::-1][:2]
-                # --- PERBAIKAN BUG SELESAI ---
-
                 pred_str = f"{top_indices[0] + 1}-{top_indices[1] + 1}"
                 angka_jalur_str = f"Jalur {top_indices[0] + 1} => {JALUR_ANGKA_MAP[top_indices[0] + 1]}\n\nJalur {top_indices[1] + 1} => {JALUR_ANGKA_MAP[top_indices[1] + 1]}"
                 all_jalur = {1, 2, 3}; predicted_jalur = {top_indices[0] + 1, top_indices[1] + 1}
@@ -320,7 +314,11 @@ def display_scan_progress_and_results(df, model_type, min_ws, max_ws, jumlah_dig
 
     if st.session_state.scan_outputs:
         st.markdown("---")
-        st.subheader("✅ Hasil Scan Selesai")
+        # --- PERUBAHAN TEXT HEADER DIMULAI ---
+        # Mengambil nama data aktif dari session_state untuk ditampilkan di judul
+        active_data_name = st.session_state.get('active_data', 'A')
+        st.subheader(f"✅ Hasil Scan Selesai dari data manual {active_data_name}")
+        # --- PERUBAHAN TEXT HEADER SELESAI ---
                 
         display_order = DIGIT_LABELS + JUMLAH_LABELS + BBFS_LABELS + SHIO_LABELS + JALUR_LABELS
         for label in display_order:
