@@ -311,7 +311,19 @@ def display_scan_progress_and_results(df, model_type, min_ws, max_ws, jumlah_dig
         st.rerun()
 
     if st.session_state.scan_outputs:
-        st.markdown("---"); st.subheader("✅ Hasil Scan Selesai")
+        st.markdown("---")
+        # --- PERUBAHAN DIMULAI ---
+        # Membuat kolom untuk header dan tombol hapus
+        col_header, col_button = st.columns([3, 1])
+        with col_header:
+            st.subheader("✅ Hasil Scan Selesai")
+        with col_button:
+            if st.button("❌ Hapus Hasil Scan", use_container_width=True):
+                st.session_state.scan_outputs.clear()
+                st.toast("🗑️ Semua hasil scan telah dihapus.")
+                st.rerun()
+        # --- PERUBAHAN SELESAI ---
+                
         display_order = DIGIT_LABELS + JUMLAH_LABELS + BBFS_LABELS + SHIO_LABELS + JALUR_LABELS
         for label in display_order:
             if label in st.session_state.scan_outputs:
@@ -327,9 +339,7 @@ def display_scan_progress_and_results(df, model_type, min_ws, max_ws, jumlah_dig
 with tab_scan:
     st.subheader("Pencarian Window Size (WS) Optimal per Kategori")
     st.info("Tekan tombol di bawah untuk menambahkan scan ke antrian. Pantau progres dan lihat hasilnya di tab 'Scan Otomatis & Monitoring'.")
-    if st.button("❌ Hapus Hasil Scan"):
-        st.session_state.scan_outputs.clear()
-        st.rerun()
+    # --- PERUBAHAN: Tombol hapus dipindahkan dari sini ke bagian hasil ---
     st.divider()
     def create_scan_button(label, container):
         is_pending = label in st.session_state.scan_queue or st.session_state.current_scan_job == label
