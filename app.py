@@ -403,6 +403,50 @@ with tab_pembalik:
 with tab_rekap_2d:
     st.subheader("Rekap Angka 2D")
     st.caption("Alat bantu untuk menganalisa dan memfilter angka 2D.")
+
+    def handle_generate():
+        """Fungsi callback untuk tombol Generate."""
+        keluaran_4d = st.session_state.get('rekap_keluaran_4d', '')
+        if keluaran_4d and keluaran_4d.isdigit() and len(keluaran_4d) == 4:
+            # st.toast(f"Mengambil angka mati dari hasil scan...")
+            
+            def get_mati_from_scan(label, column_name):
+                if label in st.session_state.scan_outputs:
+                    data = st.session_state.scan_outputs[label]
+                    result_df = data.get("table")
+                    if result_df is not None and not result_df.empty and column_name in result_df.columns:
+                        return str(result_df.iloc[0][column_name])
+                return None
+
+            scan_map = {
+                'rekap_kepala_off': ('puluhan', 'Angka Mati'),
+                'rekap_ekor_off': ('satuan', 'Angka Mati'),
+                'rekap_jumlah_off': ('jumlah_belakang', 'Angka Mati'),
+                'rekap_shio_off': ('shio_belakang', 'Shio Mati')
+            }
+            populated_fields = []
+            for state_key, (scan_label, col_name) in scan_map.items():
+                mati_value = get_mati_from_scan(scan_label, col_name)
+                if mati_value is not None:
+                    st.session_state[state_key] = mati_value
+                    populated_fields.append(state_key.replace('rekap_', '').replace('_off', ''))
+            
+            # if populated_fields:
+            #     st.info(f"Otomatis mengisi: {', '.join(populated_fields)}.")
+            # else:
+            #     st.warning("Tidak ada hasil scan 2D yang relevan. Harap jalankan 'Scan Otomatis 2D' terlebih dahulu.")
+
+        live, dead = run_rekap_filter(st.session_state)
+        st.session_state.rekap_results = {"live": live, "dead": dead}
+
+    def handle_reset():
+        """Fungsi callback untuk tombol Reset."""
+        reset_keys = ['rekap_kepala_off', 'rekap_ekor_off', 'rekap_shio_off', 'rekap_jumlah_off', 'rekap_ln_off', 'rekap_keluaran_4d']
+        for key in reset_keys:
+            if key in st.session_state:
+                st.session_state[key] = ""
+        st.session_state.rekap_results = {"live": [f"{i:02d}" for i in range(100)], "dead": set()}
+
     col1, col2 = st.columns([1.2, 1.8])
     with col1:
         st.text_input("Angka Keluaran Terakhir (4D)", placeholder="misal: 1234", key="rekap_keluaran_4d", max_chars=4)
@@ -414,45 +458,8 @@ with tab_rekap_2d:
         st.text_area("LN OFF / jalur main off", placeholder="masukan LN off pisahkan dengan spasi, koma, atau *", key="rekap_ln_off")
         
         btn_col1, btn_col2 = st.columns(2)
-        if btn_col1.button("Generate", use_container_width=True, type="primary"):
-            keluaran_4d = st.session_state.get('rekap_keluaran_4d', '')
-            if keluaran_4d and keluaran_4d.isdigit() and len(keluaran_4d) == 4:
-                st.toast(f"Mengambil angka mati dari hasil scan...")
-                
-                def get_mati_from_scan(label, column_name):
-                    if label in st.session_state.scan_outputs:
-                        data = st.session_state.scan_outputs[label]
-                        result_df = data.get("table")
-                        if result_df is not None and not result_df.empty and column_name in result_df.columns:
-                            return str(result_df.iloc[0][column_name])
-                    return None
-
-                scan_map = {
-                    'rekap_kepala_off': ('puluhan', 'Angka Mati'),
-                    'rekap_ekor_off': ('satuan', 'Angka Mati'),
-                    'rekap_jumlah_off': ('jumlah_belakang', 'Angka Mati'),
-                    'rekap_shio_off': ('shio_belakang', 'Shio Mati')
-                }
-                populated_fields = []
-                for state_key, (scan_label, col_name) in scan_map.items():
-                    mati_value = get_mati_from_scan(scan_label, col_name)
-                    if mati_value is not None:
-                        st.session_state[state_key] = mati_value
-                        populated_fields.append(state_key.replace('rekap_', '').replace('_off', ''))
-                
-                if populated_fields:
-                    st.info(f"Otomatis mengisi: {', '.join(populated_fields)}.")
-                else:
-                    st.warning("Tidak ada hasil scan 2D yang relevan. Harap jalankan 'Scan Otomatis 2D' terlebih dahulu.")
-
-            live, dead = run_rekap_filter(st.session_state)
-            st.session_state.rekap_results = {"live": live, "dead": dead}
-
-        if btn_col2.button("Reset", use_container_width=True):
-            reset_keys = ['rekap_kepala_off', 'rekap_ekor_off', 'rekap_shio_off', 'rekap_jumlah_off', 'rekap_ln_off', 'rekap_keluaran_4d']
-            for key in reset_keys: st.session_state[key] = ""
-            st.session_state.rekap_results = {"live": [f"{i:02d}" for i in range(100)], "dead": set()}
-            st.rerun()
+        btn_col1.button("Generate", use_container_width=True, type="primary", on_click=handle_generate)
+        btn_col2.button("Reset", use_container_width=True, on_click=handle_reset)
     
     with col2:
         st.markdown("<h5 style='text-align: center;'>Papan Angka</h5>", unsafe_allow_html=True)
