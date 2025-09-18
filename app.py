@@ -415,7 +415,6 @@ with tab_rekap_2d:
         
         btn_col1, btn_col2 = st.columns(2)
         if btn_col1.button("Generate", use_container_width=True, type="primary"):
-            rerun_needed = False
             keluaran_4d = st.session_state.get('rekap_keluaran_4d', '')
             if keluaran_4d and keluaran_4d.isdigit() and len(keluaran_4d) == 4:
                 st.toast(f"Mengambil angka mati dari hasil scan...")
@@ -437,10 +436,9 @@ with tab_rekap_2d:
                 populated_fields = []
                 for state_key, (scan_label, col_name) in scan_map.items():
                     mati_value = get_mati_from_scan(scan_label, col_name)
-                    if mati_value and st.session_state[state_key] != mati_value:
+                    if mati_value is not None:
                         st.session_state[state_key] = mati_value
                         populated_fields.append(state_key.replace('rekap_', '').replace('_off', ''))
-                        rerun_needed = True
                 
                 if populated_fields:
                     st.info(f"Otomatis mengisi: {', '.join(populated_fields)}.")
@@ -449,9 +447,6 @@ with tab_rekap_2d:
 
             live, dead = run_rekap_filter(st.session_state)
             st.session_state.rekap_results = {"live": live, "dead": dead}
-            
-            if rerun_needed:
-                st.rerun()
 
         if btn_col2.button("Reset", use_container_width=True):
             reset_keys = ['rekap_kepala_off', 'rekap_ekor_off', 'rekap_shio_off', 'rekap_jumlah_off', 'rekap_ln_off', 'rekap_keluaran_4d']
